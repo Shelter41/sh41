@@ -27,3 +27,6 @@ markers = ["docker: requires a working Docker daemon", "live: requires model or 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

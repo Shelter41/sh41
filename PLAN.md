@@ -30,7 +30,8 @@ but explicitly extend manifests for local sources, inference, and MCP.
 - Gate: flag/YAML equivalence, invalid inputs before side effects, no overwrites,
   credential-free manifests, migration preservation, concurrent identity safety,
   fake-provider lifecycle checks.
-- Status: pending.
+- Status: complete (2026-09-05); 16 tests pass, including concurrent reservation,
+  socket input ownership, parser security, relative paths and fake-provider cleanup.
 
 ## Phase 3: Docker And Persistent Workspaces
 
@@ -78,3 +79,5 @@ Phase 1: isolated editable installation passed; help test passed; Ruff passed;
 isolated Python import from `/tmp` passed. SaaS worktree remained clean. Docker
 Desktop is installed but its daemon was initially unavailable; started the app
 for later integration checks. Ollama is not installed yet.
+
+Phase 2: 16 tests and Ruff passed. Docker Desktop now responds (29.6.2).
