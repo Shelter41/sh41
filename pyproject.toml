@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sh41-local"
+version = "0.1.0"
+description = "Persistent local coding agents with your choice of harness and model."
+requires-python = ">=3.12"
+license = "Apache-2.0"
+readme = "README.md"
+dependencies = ["click>=8.1,<9", "pydantic>=2.10,<3", "PyYAML>=6,<7", "httpx>=0.27,<1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.12,<1", "build>=1,<2"]
+
+[project.scripts]
+sh41 = "sh41_local.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sh41_local"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["docker: requires a working Docker daemon", "live: requires model or account access"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
