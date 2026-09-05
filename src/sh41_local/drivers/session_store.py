@@ -1,22 +1,8 @@
 # Adapted for sh41 Local from Shelter41 1d085945; package-local imports and local persistence.
-"""Move a native harness session between the sandbox and the control plane.
+"""Native transcript lookup and archive helpers retained for driver compatibility.
 
-Claude Code keeps one conversation as ``<project_dir>/<session-id>.jsonl`` plus
-an optional ``<project_dir>/<session-id>/`` directory of subagent transcripts,
-where ``project_dir`` is derived from the cwd (see ``claude_jsonl``). That tree
-lives on the sandbox filesystem and dies with the sandbox.
-
-This module packs exactly those files for the sessions we care about, ships them
-to the backend over the run-scoped token, and restores them into a fresh sandbox
-so ``claude --resume <id>`` finds a conversation to continue. Only ever the named
-sessions: the project dir accumulates every conversation ever run in that cwd,
-and file-history/shell-snapshots are large and worthless here.
-
-Codex and Kimi keep one conversation as a single rollout JSONL under their own
-sessions root instead, so they use ``pack_paths``/``unpack_into`` directly; the
-Claude helpers above are thin wrappers over the same two.
-
-stdlib + httpx only, like the rest of the in-VM manager.
+Local execution persists the native home directly. No archive is uploaded and
+there is no backend transport. Archive helpers are not used by the local manager.
 """
 from __future__ import annotations
 
@@ -31,7 +17,7 @@ from .claude_jsonl import project_dir_for_cwd
 
 logger = logging.getLogger("hatchery.manager.session_store")
 
-# Guard rails matching the backend's cap (app/config.py: session_snapshot_max_bytes).
+# Preserve the original archive size guard for the retained driver contract.
 MAX_SNAPSHOT_BYTES = 200 * 1024 * 1024
 
 

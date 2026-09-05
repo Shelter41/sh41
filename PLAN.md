@@ -49,17 +49,19 @@ but explicitly extend manifests for local sources, inference, and MCP.
 ## Phase 4: Harnesses, Authentication And MCP
 
 - Claude/Codex adapters follow cloud runtime conventions; OpenCode uses native
-  server events. Pin binaries. One writable attachment or submitted run at a time.
+  server message records. Pin binaries. One writable attachment or submitted run at a time.
   Persist native session IDs and structured events; no blind replay after crashes.
-- Import accounts explicitly; use environment key references. Restricted native
-  auth state only, never YAML/SQLite/logs/export. Stdio and Streamable HTTP MCP.
+- Import accounts explicitly; use environment key references. Keep imported
+  auth outside the workspace and YAML/SQLite; redact known secrets from normalized
+  events. Native transcripts remain sensitive. Stdio and Streamable HTTP MCP.
 - Gate: real per-harness message/attach/interrupt/session/recreation checks, input
   ownership, both MCP transports, both auth paths, expiry and missing-key errors.
 - Status: implemented. Native account recovery and conversation switching pass
   for Claude/Codex; real OpenCode protocol, all three harnesses' stdio/HTTP MCP,
   PTY attach/detach/input ownership/interrupt and container-restart recovery pass
-  on macOS. Real API-key account acceptance and direct-TUI-only Codex recovery
-  remain release checks; key translation/redaction/error paths have unit coverage.
+  on macOS. Direct-TUI-only conversation recovery also passes for Claude/Codex.
+  Real API-key account acceptance remains a release check; key translation,
+  redaction and error paths have unit coverage.
 
 ## Phase 5: External Inference And Ollama
 
@@ -72,7 +74,9 @@ but explicitly extend manifests for local sources, inference, and MCP.
 - Status: implemented. Managed Ollama startup, downloaded model cache, compatible
   endpoint execution and container reachability verified on macOS. Ownership,
   serialized pulls, reuse and failure paths have unit coverage. Actual local
-  edit/test acceptance is in progress; Linux host validation is outstanding.
+  edit/test acceptance passes with qwen3:4b-instruct, including a second task on
+  a network-isolated agent with only a local model relay. Linux host validation
+  and a third-party remote open-weight endpoint remain outstanding.
 
 ## Phase 6: Release Gate
 
@@ -81,15 +85,16 @@ but explicitly extend manifests for local sources, inference, and MCP.
   Docker/Ollama tests; actual reboot recovery; SaaS-blocked and offline local
   inference after downloads. Record unrun checks; never equate mocks to live proof.
 - Status: in progress. README, examples, architecture/decisions, testing guide
-  and macOS/Linux CI configuration added. CI has not run remotely. Actual Linux
-  host, machine reboot and network-blocked local acceptance are not yet verified.
+  and macOS/Linux CI configuration added. Wheel install plus actual CLI deployment
+  and a turn outside the checkout pass. CI has not run remotely. Actual Linux
+  host, machine reboot and live API-key authentication are not yet verified.
 
 ## Validation Record
 
 Phase 1: isolated editable installation passed; help test passed; Ruff passed;
 isolated Python import from `/tmp` passed. SaaS worktree remained clean. Docker
 Desktop is installed but its daemon was initially unavailable; started the app
-for later integration checks. Ollama is not installed yet.
+for later integration checks. Ollama was not installed at that phase.
 
 Phase 2: 16 tests and Ruff passed. Docker Desktop now responds (29.6.2).
 
@@ -109,5 +114,31 @@ refusals being mistaken for idle turns. Provider refusal remains a failed run.
 Phase 5: installed official Ollama 0.33.3 locally; downloaded qwen3:0.6b and
 qwen3:4b-instruct. The 0.6B model served actual local inference but failed the
 coding acceptance by describing rather than applying the edit. This is recorded
-as a failed model-task test, not a passing implementation gate. The larger model
-is being checked. An initial download stalled repeatedly; retry reused its cache.
+as a failed model-task test, not a passing implementation gate. The 4B model passed
+actual editing and Python tests. A second run on an internal Docker network passed
+with public internet unreachable and only a fixed local-model relay accessible;
+the native conversation ID survived recreation. This checks agent runtime offline
+behavior, not a machine-wide air-gap policy. An initial download stalled repeatedly;
+retry reused its cache. Test model weights are retained in the gitignored
+`.context/local-acceptance/inference/models` directory.
+
+Phase 6: wheel and sdist build, four example manifests, Ruff, isolated wheel
+installation, generated YAML, real CLI deploy/run/history/park and supervisor
+cleanup outside the checkout pass. Native Linux and actual reboot need a
+disposable Linux machine/VM; live API-key checks need keys not available in the
+current shell. No user machine reboot or host firewall change was attempted.
+These outstanding gates prevent declaring the release fully validated.
+
+Combined acceptance on 2026-09-06: 51 passed and one intentionally skipped wheel
+test; the wheel end-to-end test passed separately. Two subsequent regression tests
+bring the unit suite to 42 passing tests (lost submission reply and Git symlink
+replacement). Ruff passed. The host's pre-existing Python installation under
+`/tmp` lost standard-library files during final packaging, so the project
+environments were rebuilt against durable user-local Python 3.12.14. The global
+Python symlink and SaaS environment were not changed.
+
+After rebuilding the environment: 45 unit/Docker tests passed (the opt-in wheel
+test skipped; 8 live tests deselected), Ruff passed, and wheel/sdist builds passed.
+The installed-wheel end-to-end test then passed separately on the rebuilt Python.
+The model server was stopped and only its cached weights retained; all test-owned
+agent containers were removed. Unrelated Docker services were left running.

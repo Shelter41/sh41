@@ -86,3 +86,4 @@ def test_container_host_routing(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="loopback-only"):
         service.container_url({"url": "http://127.0.0.1:1234"})
     assert service.container_url({"url": "http://172.30.0.1:1234"}) == "http://172.30.0.1:1234/v1"
+    assert service.container_url({"url": "https://models.example.com"}) == "https://models.example.com:443/v1"

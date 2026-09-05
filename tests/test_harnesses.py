@@ -133,7 +133,24 @@ def test_worker_rejects_duplicate_submission(tmp_path, monkeypatch):
     atomic_json(manager.run_dir(ident) / "status.json", {"status": "completed"})
     with pytest.raises(ValueError, match="not be replayed"):
         manager.dispatch({"op": "run", "run_id": ident, "session_id": str(uuid.uuid4())})
+
+
 def test_provider_refusal_and_auth_errors_are_terminal():
     from sh41_local.drivers.claude_jsonl import is_turn_complete
     assert is_turn_complete({"type": "assistant", "message": {"stop_reason": "refusal"}})
     assert is_turn_complete({"type": "assistant", "isApiErrorMessage": True, "message": {}})
+
+
+def test_detached_codex_native_turn_is_busy(tmp_path):
+    from types import SimpleNamespace
+    manager = Manager(tmp_path)
+    manager.spec = AgentSpec(agent="test", harness="codex")
+    manager.runtime = SimpleNamespace(lookup=lambda key: "handle",
+                                     inspect=lambda handle: SimpleNamespace(active=True, output=""))
+    path = tmp_path / "rollout.jsonl"
+    manager.driver = SimpleNamespace(resolve_transcript=lambda state, cwd: path)
+    path.write_text('{"type":"event_msg","payload":{"type":"task_started"}}\n')
+    assert manager.busy()
+    with path.open("a") as stream:
+        stream.write('{"type":"event_msg","payload":{"type":"task_complete"}}\n')
+    assert not manager.busy()

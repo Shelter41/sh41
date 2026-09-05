@@ -111,6 +111,45 @@ class Manager:
         self.lease = None
         return False
 
+    def busy(self):
+        if self.running:
+            return True
+        if not self.spec:
+            return False
+        handle = self.runtime.lookup("agent")
+        if not handle:
+            return False
+        inspected = self.runtime.inspect(handle)
+        if not inspected.active:
+            return False
+        if self.spec.harness == "opencode" and self.native_id():
+            try:
+                status = self.oc("GET", "/session/status", timeout=2)
+                return status.get(self.native_id(), {}).get("type") in {"busy", "retry"}
+            except httpx.HTTPError:
+                raise ValueError("Cannot determine native turn status; inspect the agent terminal") from None
+        if self.spec.harness in {"claude-code", "codex"}:
+            path = self.driver.resolve_transcript(self.state, cwd=CWD)
+            if path:
+                for line in reversed(path.read_text(errors="replace").splitlines()):
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if self.spec.harness == "claude-code":
+                        if is_turn_complete(row) or row.get("subtype") == "turn_duration":
+                            return False
+                        if row.get("type") in {"user", "assistant"}:
+                            content = (row.get("message") or {}).get("content", "")
+                            return "[Request interrupted by user" not in str(content)
+                    if row.get("type") == "event_msg":
+                        kind = (row.get("payload") or {}).get("type")
+                        if kind in {"task_complete", "turn_aborted"}:
+                            return False
+                        if kind == "task_started":
+                            return True
+        return False
+
     def ensure_session(self, session, native=None):
         if self.spec is None:
             raise ValueError("Agent is not configured")
@@ -120,6 +159,10 @@ class Manager:
                 self.runtime.terminate(handle)
             path = self.state_path(session)
             self.state = json.loads(path.read_text()) if path.exists() else {"session_id": session, "cwd": CWD}
+            if path.exists():
+                # Recover native IDs created by direct TUI turns, even if the
+                # attachment or container died before its release callback.
+                self.save_state()
             if self.spec.harness == "claude-code":
                 self.state.setdefault("native_session_id", session)
             if native:
@@ -213,6 +256,8 @@ class Manager:
                     if row["info"]["id"] not in before and row["info"]["role"] == "assistant":
                         self.emit(ident, {"type": "assistant", "message": row})
                 status = "failed" if result.get("info", {}).get("error") else "completed"
+                if status == "failed":
+                    self.emit(ident, {"type": "error", "message": json.dumps(result["info"]["error"])})
             else:
                 path = self.driver.resolve_transcript(self.state, cwd=CWD)
                 offset = self.driver.transcript_offset(path)
@@ -248,6 +293,8 @@ class Manager:
                         for e in terminal)
                     status = "failed" if failed else "completed"
                 else:
+                    self.emit(ident, {"type": "error", "message": "No confirmed turn completion. Terminal diagnostic: " +
+                        redact(self.runtime.inspect(handle).output[-2500:], self.secrets)})
                     status = "interrupted"
         except Exception as exc:
             message = str(exc).split("output=")[0]
@@ -264,7 +311,7 @@ class Manager:
         operation = payload["op"]
         with self.lock:
             if operation == "configure":
-                if self.running or self.writer():
+                if self.busy() or self.writer():
                     raise ValueError("Agent has an active writer")
                 path = self.control / "config.json"
                 if path.exists() and json.loads(path.read_text()) == payload:
@@ -280,9 +327,10 @@ class Manager:
                 atomic_json(self.control / "config.json", payload)
                 return {"configured": True}
             if operation == "status":
-                return {"running": self.running, "writer": self.writer(), "native_id": self.native_id()}
+                return {"running": self.running or ("native" if self.busy() else None),
+                        "writer": self.writer(), "native_id": self.native_id()}
             if operation == "run":
-                if self.running or self.writer():
+                if self.busy() or self.writer():
                     raise ValueError("Agent already has an active run or writable attachment")
                 ident = identifier(payload["run_id"])
                 identifier(payload["session_id"])
@@ -319,7 +367,7 @@ class Manager:
                     self.oc("POST", f"/session/{self.native_id()}/abort")
                 return {"interrupted": True}
             if operation == "attach":
-                readonly = bool(payload.get("readonly") or self.running or self.writer())
+                readonly = bool(payload.get("readonly") or self.busy() or self.writer())
                 if self.running:
                     handle = self.runtime.lookup("agent")
                     if not handle:
@@ -337,7 +385,7 @@ class Manager:
                 self.save_state()
                 return {"released": True}
             if operation == "switch-session":
-                if self.running or self.writer():
+                if self.busy() or self.writer():
                     raise ValueError("Detach or finish the run before switching sessions")
                 handle = self.runtime.lookup("agent")
                 if handle:

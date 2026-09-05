@@ -248,7 +248,7 @@ def attach(agent, read_only):
                    "secrets": agent_secrets(agent)})
     if result["readonly"]:
         click.echo("Read-only attachment.")
-    code = subprocess.call([docker_binary(), "exec", "-it", result["container"], "python", "-m",
+    code = subprocess.call([docker_binary(), "exec", "-it", "-e", "TERM=xterm-256color", result["container"], "python", "-m",
                             "sh41_local.worker", "attach", result["token"], json.dumps(result["argv"])])
     raise SystemExit(code)
 

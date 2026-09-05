@@ -11,6 +11,7 @@ SH41_TEST_DOCKER=1 .venv/bin/pytest -q -m 'docker and not live'
 SH41_TEST_NATIVE=1 .venv/bin/pytest -q tests/test_live.py
 SH41_TEST_MCP=1 .venv/bin/pytest -q tests/test_mcp_live.py
 SH41_TEST_OLLAMA=1 .venv/bin/pytest -q tests/test_local_model.py
+SH41_TEST_OLLAMA=1 SH41_TEST_OFFLINE=1 .venv/bin/pytest -q tests/test_local_model.py
 ```
 
 Native and MCP tests explicitly import existing Claude/Codex logins and consume
@@ -28,6 +29,16 @@ Python function and verifies its tests. `SH41_TEST_MODEL` selects another model;
 `SH41_TEST_OLLAMA_URL` reuses a host server. It requires actual tool execution,
 not a text response claiming success. Downloads and inference may need several
 GiB of disk/RAM and many minutes. Small models are not presumed capable.
+
+The offline variant warms the image and native provider cache, then recreates the
+agent on a test-only internal Docker network. A fixed-upstream relay exposes only
+the local model API; a public-internet request must fail before the second coding
+task passes. This changes only test containers/networks, not host firewall rules.
+
+To check a built wheel end to end, install it into a separate virtual environment
+and set `SH41_TEST_WHEEL_PYTHON` to that environment's absolute Python path, then
+run `pytest -q tests/test_wheel.py`. This executes the installed CLI and supervisor
+outside the checkout, including deployment, a real harness turn, history and park.
 
 ## Manual Release Gates
 

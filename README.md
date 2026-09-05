@@ -204,8 +204,9 @@ No SaaS calls or telemetry are implemented by sh41. Third-party harnesses and
 tools have their own network behavior. OpenCode is restricted to the configured
 provider, with auto-update, sharing, model-catalog fetch, default plugins, and LSP
 downloads disabled. First-use image/provider packages and model downloads need
-network access. Fully offline operation after warming caches remains a release
-acceptance check, not an air-gap security guarantee.
+network access. A warmed agent passed an edit/test task on an internal Docker
+network with access only to a local model relay. This is not a machine-wide
+air-gap security guarantee or an optional production network policy.
 
 ## Cloud Compatibility
 

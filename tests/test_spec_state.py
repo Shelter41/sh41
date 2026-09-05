@@ -138,6 +138,31 @@ def test_restart_cleans_only_incomplete_provisioning(tmp_path):
     assert service.store.deployment("healthy")["status"] == "deployed"
 
 
+def test_lost_submission_reply_is_reconciled_not_replayed(tmp_path, monkeypatch):
+    provider = FakeProvider()
+    service = AgentService(tmp_path, provider)
+    deployment = service.deploy(native())
+    calls = []
+
+    def rpc(deployment, payload):
+        calls.append(payload["op"])
+        if payload["op"] == "status":
+            return {"running": None, "writer": False}
+        if payload["op"] == "run":
+            raise RuntimeError("Lost reply after acceptance")
+        return {"status": "completed", "events": [], "more": False, "native_id": "native"}
+
+    monkeypatch.setattr(provider, "rpc", rpc, raising=False)
+    monkeypatch.setattr(provider, "inspect", lambda deployment: {"State": {"Running": True}}, raising=False)
+    monkeypatch.setattr(service, "ready", lambda *args: deployment)
+    with pytest.raises(RuntimeError, match="Lost reply"):
+        service.dispatch({"op": "run", "agent": "atlas", "message": "hello"})
+    run = service.store.history("atlas")[0]
+    assert run["status"] in {"pending", "running"}
+    assert service.sync_run("atlas", run["id"])["status"] == "completed"
+    assert calls.count("run") == 1
+
+
 def test_supervisor_socket_and_busy(tmp_path):
     # macOS sockaddr_un has a small path limit; pytest tmp paths can exceed it.
     import tempfile

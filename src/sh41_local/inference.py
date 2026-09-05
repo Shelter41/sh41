@@ -170,7 +170,7 @@ class Ollama:
             raise ValueError("Existing Ollama is loopback-only; expose it on a Docker-reachable interface or let sh41 start its own service")
         if ":" in host:
             host = f"[{host}]"
-        return f"{parts.scheme}://{host}:{parts.port or 11434}/v1"
+        return f"{parts.scheme}://{host}:{parts.port or (443 if parts.scheme == 'https' else 80)}/v1"
 
     def stop(self):
         with self.locked():

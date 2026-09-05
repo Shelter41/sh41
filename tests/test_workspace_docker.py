@@ -55,6 +55,25 @@ def test_copy_and_export_do_not_follow_external_symlinks(tmp_path):
     assert not (tmp_path / "export").exists()
 
 
+def test_git_symlink_replaced_by_dirty_directory_cannot_write_outside(tmp_path):
+    source, outside = tmp_path / "source", tmp_path / "outside"
+    source.mkdir()
+    outside.mkdir()
+    (outside / "file").write_text("do not modify")
+    git(source, "init")
+    git(source, "config", "user.email", "test@example.com")
+    git(source, "config", "user.name", "Test")
+    (source / "link").symlink_to(outside, target_is_directory=True)
+    git(source, "add", ".")
+    git(source, "commit", "-m", "link")
+    (source / "link").unlink()
+    (source / "link").mkdir()
+    (source / "link/file").write_text("dirty working copy")
+    work = prepare(tmp_path / "state", "id", "test", source)
+    assert (work / "link/file").read_text() == "dirty working copy"
+    assert (outside / "file").read_text() == "do not modify"
+
+
 def test_export_private_copy_no_overwrite(tmp_path):
     work = prepare(tmp_path / "state", "id", "atlas", None)
     (work / "result.txt").write_text("agent output")
