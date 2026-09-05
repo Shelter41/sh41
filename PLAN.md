@@ -42,7 +42,9 @@ but explicitly extend manifests for local sources, inference, and MCP.
   redeploy reuses identity and files. Export to a new directory only.
 - Gate: two-agent isolation, source unchanged, detach persistence, lifecycle and
   crash recovery, idempotency, targeted cleanup and faithful export.
-- Status: pending.
+- Status: Docker/filesystem implementation complete; 19 unit tests and one real
+  two-container lifecycle test pass on macOS. Terminal/manager recovery is checked
+  with the harness implementation in Phase 4.
 
 ## Phase 4: Harnesses, Authentication And MCP
 
@@ -81,3 +83,8 @@ Desktop is installed but its daemon was initially unavailable; started the app
 for later integration checks. Ollama is not installed yet.
 
 Phase 2: 16 tests and Ruff passed. Docker Desktop now responds (29.6.2).
+
+Phase 3: 19 non-Docker tests and real Docker isolation/pause/resume/park/recreate/
+export test passed. Docker's desktop credential helper initially blocked public
+pulls; acceptance used a temporary credential-free Docker configuration and the
+same local daemon, without changing the user's Docker configuration.

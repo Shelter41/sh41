@@ -8,8 +8,8 @@ workspaces, durable conversations, compatible model endpoints, and local Ollama.
 No Shelter41 account or SaaS backend is required.
 
 **Status:** implementation in progress. Manifest generation (`launch --write-only`),
-validation, local metadata listing and supervisor coordination are implemented.
-Agent execution is next. [PLAN.md](PLAN.md) records the implementation phases and
+validation, SQLite state, Docker lifecycle, private workspaces and export are
+implemented. Harness execution is next. [PLAN.md](PLAN.md) records the implementation phases and
 their acceptance gates; examples below describe the intended MVP interface.
 
 ## Install From Source

@@ -129,3 +129,39 @@ def list_command(name):
 
 for _name in ("sessions", "history"):
     list_command(_name)
+
+
+def lifecycle_command(name):
+    @main.command(name)
+    @click.argument("agent")
+    def command(agent):
+        """Change an agent's execution lifecycle, retaining its files."""
+        emit(call({"op": name, "agent": agent}))
+
+
+for _name in ("pause", "resume", "park", "redeploy"):
+    lifecycle_command(_name)
+
+
+@main.command("export")
+@click.argument("agent")
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+def export_command(agent, output):
+    """Copy working files to a new local directory."""
+    emit(call({"op": "export", "agent": agent, "output": str(output.resolve())}))
+
+
+@main.command()
+def doctor():
+    """Check local execution dependencies."""
+    import shutil
+    from .docker import DockerProvider
+    from .paths import state_home
+
+    checks = {"state_home": str(state_home()), "ollama": shutil.which("ollama") or "not installed"}
+    try:
+        DockerProvider(state_home()).require()
+        checks["docker"] = "ready"
+    except RuntimeError as exc:
+        checks["docker"] = str(exc)
+    emit(checks)
