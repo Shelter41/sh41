@@ -1,0 +1,9 @@
+version: 1
+agent: local-reviewer
+harness: opencode
+workspace: default
+model: qwen3:4b-instruct
+sandbox:
+  provider: docker
+inference:
+  provider: ollama

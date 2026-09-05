@@ -1,0 +1,8 @@
+version: 1
+agent: claude-reviewer
+harness: claude-code
+workspace: default
+sandbox:
+  provider: docker
+inference:
+  provider: native

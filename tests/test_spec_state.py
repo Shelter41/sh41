@@ -127,6 +127,17 @@ def test_service_idempotency_and_failure(tmp_path):
     assert service.store.deployment("atlas")["status"] == "deployed"
 
 
+def test_restart_cleans_only_incomplete_provisioning(tmp_path):
+    provider = FakeProvider()
+    service = AgentService(tmp_path, provider)
+    incomplete, _ = service.store.reserve(native())
+    service.deploy(native("healthy"))
+    service.recover_startup()
+    assert provider.removed == [incomplete["id"]]
+    assert service.store.deployment("atlas", latest=True)["status"] == "failed"
+    assert service.store.deployment("healthy")["status"] == "deployed"
+
+
 def test_supervisor_socket_and_busy(tmp_path):
     # macOS sockaddr_un has a small path limit; pytest tmp paths can exceed it.
     import tempfile

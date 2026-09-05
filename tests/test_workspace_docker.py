@@ -5,7 +5,7 @@ import pytest
 
 from sh41_local.docker import DockerProvider
 from sh41_local.service import AgentService
-from sh41_local.spec import AgentSpec, Source
+from sh41_local.spec import AgentSpec, Inference, SecretRef, Source
 from sh41_local.workspace import export, prepare
 
 
@@ -77,12 +77,13 @@ def test_real_docker_isolation_and_recreation(tmp_path):
     service = AgentService(root)
     provider: DockerProvider = service.provider
     deployments = []
+    inference = Inference(api_key=SecretRef(env="TEST_KEY"))
     try:
         for name in ("one", "two"):
-            spec = AgentSpec(agent=name, harness="codex", source=Source(path=str(source)))
-            deployments.append(service.deploy(spec))
+            spec = AgentSpec(agent=name, harness="codex", source=Source(path=str(source)), inference=inference)
+            deployments.append(service.deploy(spec, {"TEST_KEY": "test-not-a-real-key"}))
         one, two = deployments
-        assert service.deploy(AgentSpec(agent="one", harness="codex", source=Source(path=str(source))))["id"] == one["id"]
+        assert service.deploy(AgentSpec(agent="one", harness="codex", source=Source(path=str(source)), inference=inference))["id"] == one["id"]
         info = provider.inspect(one)
         assert info["Config"]["User"] != "0:0"
         assert info["HostConfig"]["CapDrop"] == ["ALL"]
@@ -98,8 +99,8 @@ def test_real_docker_isolation_and_recreation(tmp_path):
         assert provider.inspect(one)["State"]["Running"]
         service.lifecycle("one", "park")
         assert provider.inspect(one) is None
-        spec = AgentSpec(agent="one", harness="codex", source=Source(path=str(source)))
-        recreated = service.deploy(spec)
+        spec = AgentSpec(agent="one", harness="codex", source=Source(path=str(source)), inference=inference)
+        recreated = service.deploy(spec, {"TEST_KEY": "test-not-a-real-key"})
         deployments.append(recreated)
         assert recreated["id"] != one["id"]
         assert recreated["agent_id"] == one["agent_id"]

@@ -1,0 +1,8 @@
+version: 1
+agent: codex-reviewer
+harness: codex
+workspace: default
+sandbox:
+  provider: docker
+inference:
+  provider: native

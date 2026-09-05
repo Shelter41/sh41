@@ -55,7 +55,11 @@ but explicitly extend manifests for local sources, inference, and MCP.
   auth state only, never YAML/SQLite/logs/export. Stdio and Streamable HTTP MCP.
 - Gate: real per-harness message/attach/interrupt/session/recreation checks, input
   ownership, both MCP transports, both auth paths, expiry and missing-key errors.
-- Status: pending.
+- Status: implemented. Native account recovery and conversation switching pass
+  for Claude/Codex; real OpenCode protocol, all three harnesses' stdio/HTTP MCP,
+  PTY attach/detach/input ownership/interrupt and container-restart recovery pass
+  on macOS. Real API-key account acceptance and direct-TUI-only Codex recovery
+  remain release checks; key translation/redaction/error paths have unit coverage.
 
 ## Phase 5: External Inference And Ollama
 
@@ -65,7 +69,10 @@ but explicitly extend manifests for local sources, inference, and MCP.
 - Gate: actual edit-and-test tasks remotely and locally; shared inference;
   download reuse; clear missing-binary/network/pull/memory/tool failures; leave
   unrelated Ollama services alone.
-- Status: pending.
+- Status: implemented. Managed Ollama startup, downloaded model cache, compatible
+  endpoint execution and container reachability verified on macOS. Ownership,
+  serialized pulls, reuse and failure paths have unit coverage. Actual local
+  edit/test acceptance is in progress; Linux host validation is outstanding.
 
 ## Phase 6: Release Gate
 
@@ -73,7 +80,9 @@ but explicitly extend manifests for local sources, inference, and MCP.
 - Gate: full suite/Ruff/wheel install; real harness acceptance; macOS and Linux
   Docker/Ollama tests; actual reboot recovery; SaaS-blocked and offline local
   inference after downloads. Record unrun checks; never equate mocks to live proof.
-- Status: pending.
+- Status: in progress. README, examples, architecture/decisions, testing guide
+  and macOS/Linux CI configuration added. CI has not run remotely. Actual Linux
+  host, machine reboot and network-blocked local acceptance are not yet verified.
 
 ## Validation Record
 
@@ -88,3 +97,17 @@ Phase 3: 19 non-Docker tests and real Docker isolation/pause/resume/park/recreat
 export test passed. Docker's desktop credential helper initially blocked public
 pulls; acceptance used a temporary credential-free Docker configuration and the
 same local daemon, without changing the user's Docker configuration.
+
+Phase 4: 39 unit tests and 3 uncredentialed Docker tests pass (42 total). Native
+Codex and Claude account tests pass across park/recreate, new conversation and
+continue-conversation. All three actual harnesses invoked both MCP transports.
+Real PTYs verified writable-client exclusion, read-only observation, detach,
+interrupt and interrupted-run recovery after container restart. Fixed partial
+UTF-8 JSONL handling, exact native transcript selection, and prompt provider
+refusals being mistaken for idle turns. Provider refusal remains a failed run.
+
+Phase 5: installed official Ollama 0.33.3 locally; downloaded qwen3:0.6b and
+qwen3:4b-instruct. The 0.6B model served actual local inference but failed the
+coding acceptance by describing rather than applying the edit. This is recorded
+as a failed model-task test, not a passing implementation gate. The larger model
+is being checked. An initial download stalled repeatedly; retry reused its cache.

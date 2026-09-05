@@ -6,9 +6,11 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from .paths import private_dir
+from .credentials import native_profile
 from .workspace import prepare
 
 
@@ -69,6 +71,14 @@ class DockerProvider:
 
     def create(self, spec, deployment, secrets):
         self.require()
+        native = native_profile(self.root, spec.harness)
+        if spec.harness != "opencode" and not native and not spec.inference.api_key:
+            raise ValueError("Import native credentials first or supply --api-key-env")
+        network = None
+        if spec.inference.provider == "ollama":
+            from .inference import Ollama
+            state = Ollama(self.root, self).pull(spec.model)
+            network = state.get("network")
         image = self.ensure_image(spec.harness)
         base = private_dir(self.root / "agents" / deployment["agent_id"])
         work = prepare(self.root, deployment["agent_id"], spec.agent,
@@ -77,6 +87,8 @@ class DockerProvider:
         control = private_dir(base / "control")
         if spec.instructions:
             (control / "instructions.md").write_text(Path(spec.instructions).read_text())
+        else:
+            (control / "instructions.md").unlink(missing_ok=True)
         name = self.name(deployment)
         self.command([
             "run", "-d", "--name", name,
@@ -85,12 +97,49 @@ class DockerProvider:
             "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=256",
             "--cpus=2", "--memory=4g", "--init", "--restart=unless-stopped",
             "--add-host=host.docker.internal:host-gateway",
+            *(["--network", network] if network else []),
             "--mount", f"type=bind,src={work},dst=/workspace/agent",
             "--mount", f"type=bind,src={home},dst=/state/home",
             "--mount", f"type=bind,src={control},dst=/state/control",
             image,
         ], timeout=60)
+        self.wait_ready(deployment)
+        self.configure(deployment, spec, secrets)
         return name
+
+    def wait_ready(self, deployment):
+        for _ in range(60):
+            try:
+                self.rpc(deployment, {"op": "status"}, timeout=5)
+                return
+            except (RuntimeError, ValueError):
+                time.sleep(0.25)
+        raise RuntimeError("Agent manager did not become ready")
+
+    def configure(self, deployment, spec, secrets):
+        control = self.root / "agents" / deployment["agent_id"] / "control"
+        previous = control / "config.json"
+        saved = json.loads(previous.read_text()) if previous.exists() else {}
+        payload = {"op": "configure", "spec": spec.model_dump(),
+                   "secrets": secrets or saved.get("secrets", {}),
+                   "native": native_profile(self.root, spec.harness)}
+        if spec.inference.provider == "ollama":
+            from .inference import Ollama
+            ollama = Ollama(self.root, self)
+            state = ollama.pull(spec.model)
+            payload["inference_url"] = ollama.container_url(state)
+        return self.rpc(deployment, payload, timeout=180)
+
+    def inference_network(self):
+        name = f"sh41-inference-{self.owner}"
+        result = self.command(["network", "inspect", name], check=False)
+        if result.returncode:
+            self.command(["network", "create", "--label", f"sh41.owner={self.owner}", name])
+            result = self.command(["network", "inspect", name])
+        data = json.loads(result.stdout)[0]
+        if data.get("Labels", {}).get("sh41.owner") != self.owner:
+            raise RuntimeError("Inference network ownership mismatch")
+        return name, data["IPAM"]["Config"][0]["Gateway"]
 
     def inspect(self, deployment: dict):
         result = self.command(["inspect", self.name(deployment)], check=False)
@@ -109,6 +158,7 @@ class DockerProvider:
         if not self.inspect(deployment):
             raise RuntimeError("Container is missing; park and redeploy to recreate it")
         self.command(["start", self.name(deployment)])
+        self.wait_ready(deployment)
 
     def remove(self, deployment):
         if self.inspect(deployment):

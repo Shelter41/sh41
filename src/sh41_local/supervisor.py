@@ -66,7 +66,7 @@ def request(payload: dict, *, root: Path | None = None):
         sock.settimeout(None)
         sock.sendall(json.dumps(payload).encode() + b"\n")
         with sock.makefile("r") as stream:
-            line = stream.readline(MAX_REQUEST)
+            line = stream.readline()
         if not line:
             raise RuntimeError("Supervisor disconnected; inspect agent state before retrying")
         response = json.loads(line)
@@ -133,6 +133,11 @@ def serve():
         path = Path(socket_path(root))
         path.unlink(missing_ok=True)
         service = AgentService(root)
+        try:
+            service.recover_startup()
+        except RuntimeError:
+            # Metadata remains accessible while Docker is unavailable.
+            pass
         with Server(root, service.dispatch) as server:
             path.chmod(0o600)
             server.serve_forever()

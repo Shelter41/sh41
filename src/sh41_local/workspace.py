@@ -24,6 +24,10 @@ def ignored(path: Path) -> bool:
 
 
 def copy_entry(source: Path, destination: Path, root: Path):
+    if not source.resolve().is_relative_to(root.resolve()):
+        raise ValueError("Workspace contains an external symlink path")
+    if destination.is_symlink():
+        destination.unlink()
     if source.is_symlink():
         target = source.resolve()
         if not target.is_relative_to(root.resolve()) or Path(os.readlink(source)).is_absolute():
@@ -55,8 +59,10 @@ def prepare(root: Path, agent_id: str, slug: str, source: Path | None) -> Path:
         target = staging / "work"
         is_git = source is not None and (source / ".git").exists()
         if is_git:
-            git("clone", "--no-hardlinks", "--no-local", "--", str(source), str(target))
+            # Materialize only validated source paths, not unchecked Git symlinks.
+            git("clone", "--no-checkout", "--no-hardlinks", "--no-local", "--", str(source), str(target))
             git("remote", "remove", "origin", cwd=target)
+            git("read-tree", "HEAD", cwd=target)
             files = git("ls-files", "-z", "--cached", "--others", "--exclude-standard", cwd=source)
             for name in set(files.stdout.split("\0")) - {""}:
                 relative = Path(name)
@@ -70,7 +76,7 @@ def prepare(root: Path, agent_id: str, slug: str, source: Path | None) -> Path:
                         dst.unlink(missing_ok=True)
                 else:
                     copy_entry(src, dst, source)
-            git("checkout", "-b", f"agent/{slug}", cwd=target)
+            git("checkout", "-B", f"agent/{slug}", cwd=target)
         else:
             target.mkdir()
             if source:

@@ -183,3 +183,22 @@ class Store:
         with self.connect() as conn:
             return [dict(r) for r in conn.execute("SELECT * FROM runs WHERE agent_id=? ORDER BY rowid",
                                                 (self.agent(slug)["id"],))]
+
+    def native_session(self, session_id, native_id):
+        if native_id:
+            with self.connect() as conn:
+                conn.execute("UPDATE sessions SET native_id=? WHERE id=?", (native_id, session_id))
+
+    def run(self, slug, ident):
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM runs WHERE id=? AND agent_id=?",
+                               (ident, self.agent(slug)["id"])).fetchone()
+            if row is None:
+                raise ValueError("Run does not belong to this agent")
+            return dict(row)
+
+    def events(self, ident, offset=0):
+        with self.connect() as conn:
+            return [json.loads(row[0]) for row in conn.execute(
+                "SELECT payload FROM events WHERE run_id=? AND sequence>=? ORDER BY sequence",
+                (ident, offset))]
