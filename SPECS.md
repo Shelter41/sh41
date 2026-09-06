@@ -47,7 +47,11 @@ browsing does not reserve or materialize an agent directory. Its Ollama selector
 passive model snapshots, preserving explicit/custom choices on refresh; no model
 is started or downloaded by choosing it. An independent read-only HTML adapter
 fetches official Ollama tool-model search pages and per-family tags asynchronously.
-The dropdown labels downloaded models separately from library families; local tags
+One autocomplete input combines search and selection, preserving input focus while
+an overlay shows keyboard/mouse-selectable suggestions. Editing clears any previous
+model and variant; asynchronous results preserve typed text and do not reopen a
+dismissed menu. The separate local-variant dropdown remains unchanged.
+Suggestions label downloaded models separately from library families; local tags
 include published weight sizes and exclude cloud variants. Search is debounced,
 pagination is explicit, and stale responses cannot replace newer searches or a
 different model selection. Requests have timeouts and response-size limits; library

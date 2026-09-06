@@ -57,9 +57,11 @@ Selecting a non-Git folder requires Original folder (read-write) or Private copy
 Other agents using the repository/folder appear with their mode and recorded
 status. Shared original-folder edits require confirmation, including overlapping
 parent/child folders and paused/parked agents that can later resume.
-The Ollama model dropdown combines downloaded models with families from the live
+The Ollama model search field opens suggestions combining downloaded models with families from the live
 [Ollama tools library](https://ollama.com/search?c=tools), labeled separately.
-Search the library or use More for further results, then choose a local variant
+Type to filter/search, choose a suggestion with arrows and Enter or a click, or
+use More for further results. Escape closes suggestions without closing the wizard.
+Then choose a local variant
 from its dropdown, including the published download size (not required RAM).
 Cloud-only variants are excluded. Choose Custom model to enter another tag.
 Compatible endpoints and native providers retain manual model entry.

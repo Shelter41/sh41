@@ -6,6 +6,7 @@ from sh41_local.cli import main
 from sh41_local.spec import parse_yaml
 from sh41_local.tui.app import Shell
 from sh41_local.tui.wizard import Wizard, references
+from sh41_local.tui.model_picker import ModelPicker
 
 
 class FakeClient:
@@ -248,13 +249,13 @@ async def test_wizard_directory_completion_and_model_dropdown(tmp_path, monkeypa
         await pilot.pause(0.5)
         wizard.query_one("#source-mode", Select).value = "copy"
         await click(pilot, "#next")
-        selector = wizard.query_one("#installed", Select)
+        selector = wizard.query_one("#installed", ModelPicker)
         selector.focus()
-        await pilot.press("enter")
+        await pilot.pause()
         if os.environ.get("SH41_TEST_SCREENSHOTS"):
             app.save_screenshot(f"model-dropdown-{dimensions[0]}x{dimensions[1]}.svg",
                                 path=os.environ["SH41_TEST_SCREENSHOTS"])
-        await pilot.press("home", "enter")
+        await pilot.press("enter")
         await pilot.pause()
         assert selector.value == "local:4b"
         assert wizard.value("model") == "local:4b"

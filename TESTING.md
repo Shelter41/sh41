@@ -89,7 +89,7 @@ container restart as a machine reboot, or fixture completions as model quality.
 ## Shell Acceptance
 
 ```sh
-.venv/bin/pytest -q tests/test_control.py tests/test_tui.py tests/test_sidebar.py tests/test_catalog.py
+.venv/bin/pytest -q tests/test_control.py tests/test_tui.py tests/test_sidebar.py tests/test_catalog.py tests/test_model_picker.py
 SH41_TEST_DOCKER=1 .venv/bin/pytest -q tests/test_shell_live.py
 ```
 
@@ -109,6 +109,10 @@ offline fallback, search races, pagination, keyboard variant selection, preserve
 selections and side-effect-free YAML saving at both sizes. Automated tests stub
 the remote library; a live read-only check of search and tags is separate from
 model-download or inference acceptance.
+
+Autocomplete tests exercise typing, arrow/Enter selection, mouse selection,
+Escape and focus-loss dismissal, variant invalidation on edits, and popup bounds
+at 80x24 and 120x40. They retain `model-autocomplete-*.svg` with screenshot capture.
 
 The real shell test starts two detached OpenCode terminals without a model prompt,
 attaches and detaches through Textual, resizes the terminal, closes and kills shell

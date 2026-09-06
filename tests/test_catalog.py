@@ -10,6 +10,7 @@ from sh41_local import catalog
 from sh41_local.catalog import page as fetch_page
 from sh41_local.spec import parse_yaml
 from sh41_local.tui.app import Shell
+from sh41_local.tui.model_picker import ModelPicker
 from test_tui import FakeClient, click, settled
 
 
@@ -83,10 +84,12 @@ async def test_library_dropdown_variants_paging_and_save_only(tmp_path, monkeypa
         await catalog_settled(pilot, wizard, "1 library")
         assert not wizard.query("#wizard-ollama-library")
         assert any(value == "@library/qwen3" for _, value in wizard.model_options())
-        selector = wizard.query_one("#installed", Select)
+        selector = wizard.query_one("#installed", ModelPicker)
         selector.scroll_visible()
         selector.focus()
-        await pilot.press("enter", "home", "down", "enter")
+        await pilot.press("q", "w", "e", "n", "3")
+        await catalog_settled(pilot, wizard, "1 library")
+        await pilot.press("enter")
         await catalog_settled(pilot, wizard, "Choose a variant")
         assert wizard.value("model") == ""
         with pytest.raises(ValueError):

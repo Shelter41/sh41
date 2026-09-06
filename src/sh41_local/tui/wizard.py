@@ -15,6 +15,7 @@ from .dialogs import Dialog, Prompt
 from .client import background
 from .completion import DirectorySuggester
 from .directory_picker import DirectoryPicker
+from .model_picker import ModelPicker
 
 
 def references(text):
@@ -103,7 +104,7 @@ class Wizard(Dialog):
     Wizard #source { width: 1fr; }
     Wizard #source-browse { min-width: 10; width: 10; }
     Wizard #library-search-controls { height: 3; margin: 0; }
-    Wizard #library-search { width: 1fr; }
+    Wizard #installed { width: 1fr; }
     Wizard #library-search-controls Button { min-width: 12; width: 12; }
     """
 
@@ -151,13 +152,12 @@ class Wizard(Dialog):
                     yield Select([("Ollama", "ollama"), ("Compatible endpoint", "openai-compatible"),
                                   ("Native provider", "native")], allow_blank=False,
                                  value=spec.inference.provider if spec else "ollama", id="provider")
+                    yield Label("Ollama model", id="installed-label")
                     with Horizontal(id="library-search-controls"):
-                        yield Input(placeholder="Search Ollama library", id="library-search")
+                        yield ModelPicker(self.model_options(), value=spec.model if spec and spec.model in self.models else "",
+                                          id="installed")
                         yield Button("Refresh", id="library-refresh")
                         yield Button("More", id="library-more", disabled=True)
-                    yield Label("Ollama model", id="installed-label")
-                    yield Select(self.model_options(), value=spec.model if spec and spec.model in self.models else "",
-                                 allow_blank=False, id="installed")
                     yield Select([], prompt="Choose local variant", id="library-variant")
                     yield Static("", id="library-status", markup=False)
                     yield Static("", id="ollama-status", markup=False)
@@ -296,7 +296,7 @@ class Wizard(Dialog):
         self.query_one("#mcp-list", Static).update("\n".join(
             f"{name} ({server['transport']})" for name, server in self.mcp.items()) or "None")
 
-    @on(Select.Changed, "#installed")
+    @on(ModelPicker.Changed, "#installed")
     def installed(self, event):
         self.variant_key = None
         if isinstance(event.value, str) and event.value.startswith("@library/"):
@@ -332,7 +332,7 @@ class Wizard(Dialog):
 
     def download_model(self, model):
         if model:
-            self.query_one("#installed", Select).value = ""
+            self.query_one("#installed", ModelPicker).value = ""
             self.query_one("#model", Input).value = model
             self.app.submit_job("models-pull", model=model)
 
@@ -340,11 +340,15 @@ class Wizard(Dialog):
         if self.step == 1 and self.query_one("#provider", Select).value == "ollama" and self.library_key is None:
             self.search_library()
 
-    @on(Input.Changed, "#library-search")
+    @on(ModelPicker.Edited, "#installed")
     def library_search_changed(self):
+        self.variant_key = None
+        self.query_one("#model", Input).value = ""
+        self.update_model_fields()
         if self.library_timer:
             self.library_timer.stop()
         self.library_key = None
+        self.query_one("#library-more", Button).disabled = True
         if self.step == 1 and self.query_one("#provider", Select).value == "ollama":
             self.library_timer = self.set_timer(0.35, self.search_library)
 
@@ -354,12 +358,13 @@ class Wizard(Dialog):
             self.library_timer.stop()
         if self.step != 1 or self.query_one("#provider", Select).value != "ollama":
             return
-        self.library_key = (self.value("library-search"), object())
+        self.library_key = (self.query_one("#installed", ModelPicker).query_text, object())
         self.load_library(self.library_key, 1)
 
     @on(Button.Pressed, "#library-more")
     def more_library(self):
-        self.load_library(self.library_key, self.library_page + 1)
+        if self.library_key is not None:
+            self.load_library(self.library_key, self.library_page + 1)
 
     @work(exit_on_error=False)
     async def load_library(self, key, number):
@@ -412,14 +417,15 @@ class Wizard(Dialog):
         self.update_model_fields()
 
     def refresh_model_options(self):
-        selector = self.query_one("#installed", Select)
+        selector = self.query_one("#installed", ModelPicker)
         selected = selector.value
         options = self.model_options()
         if isinstance(selected, str) and selected.startswith("@library/") and selected not in [value for _, value in options]:
             options.insert(len(self.models), (selected.removeprefix("@library/") + " (library)", selected))
-        with selector.prevent(Select.Changed):
+        with selector.prevent(ModelPicker.Changed):
             selector.set_options(options)
-            selector.value = selected if selected in [value for _, value in options] else ""
+            if selected and selected not in [value for _, value in options]:
+                selector.value = ""
 
     def update_model_fields(self):
         ollama = self.query_one("#provider", Select).value == "ollama"
@@ -446,7 +452,8 @@ class Wizard(Dialog):
             status += " (stale)"
         self.query_one("#ollama-status", Static).update(status)
         self.query_one("#wizard-ollama-start", Button).disabled = state.get("state") == "ready" and not state.get("stale")
-        custom = not ollama or not self.query_one("#installed", Select).value
+        picker = self.query_one("#installed", ModelPicker)
+        custom = not ollama or (not picker.value and not picker.query_text)
         for ident in ("#model", "#model-label"):
             self.query_one(ident).display = custom
 
@@ -471,9 +478,9 @@ class Wizard(Dialog):
         if provider != "openai-compatible":
             self.query_one("#endpoint", Input).value = ""
         # Returning from another provider must not silently overwrite its custom model.
-        selector = self.query_one("#installed", Select)
+        selector = self.query_one("#installed", ModelPicker)
         model = self.value("model")
-        with selector.prevent(Select.Changed):
+        with selector.prevent(ModelPicker.Changed):
             selector.value = model if model in self.models else ""
         self.update_model_fields()
         self.ensure_library()
