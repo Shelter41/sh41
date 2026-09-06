@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git tmux ca-cer
 RUN pip install --no-cache-dir 'httpx>=0.27,<1' 'pydantic>=2.10,<3' 'PyYAML>=6,<7' 'click>=8.1,<9' 'tomli-w>=1,<2'
 ARG HARNESS=opencode
 RUN case "$HARNESS" in \
-    claude-code) npm install -g @anthropic-ai/claude-code@2.1.220 ;; \
+    claude-code) npm install -g @anthropic-ai/claude-code@2.1.263 ;; \
     codex) npm install -g @openai/codex@0.144.4 ;; \
     opencode) npm install -g opencode-ai@1.18.29 ;; \
     *) exit 2 ;; esac

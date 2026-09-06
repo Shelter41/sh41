@@ -1,5 +1,7 @@
 # Decisions
 
+- Offer all documented active standard Claude versions alongside aliases, excluding retired/restricted research models, and upgrade the runner pin for Fable 5.1 rather than exposing choices unsupported by new sandboxes.
+
 - Restrict native-harness wizard choices to documented Claude aliases and Codex IDs, with an account-default fallback, while keeping stored manifests forward-compatible instead of tying their validity to a changing UI catalog.
 
 - Disable Pull for unresolved library choices instead of guessing a tag or requesting manual entry, while resolving a sole downloadable variant automatically and confirming the exact selected tag before download.

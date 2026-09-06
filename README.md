@@ -35,6 +35,8 @@ needs internet access.
 3. Select **Save and Start**, then select the agent and **Attach**.
 
 Claude and Codex offer only their native models, plus an account-default option.
+Claude includes Fable 5.1, Opus 5, Sonnet 5, Haiku 4.5 and older active versions;
+availability depends on your account. [Model choices](docs/USAGE.md#native-claude-models)
 Ollama and compatible endpoints are available with OpenCode.
 
 A Git repository gets its own worktree and branch, starting from committed `HEAD`.

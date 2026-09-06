@@ -524,6 +524,9 @@ class Wizard(Dialog):
                 native_select.set_options(options)
                 native_select.value = model if model in {value for _, value in options} else Select.NULL
             self.query_one("#native-model-label", Label).update("Claude model" if harness == "claude-code" else "Codex model")
+            self.query_one("#native-model-note", Static).update(
+                "Account/provider access varies. Fable and 1M may use paid credits."
+                if harness == "claude-code" else "Availability depends on your account.")
         self.query_one("#auth-import").display = harness != "opencode"
         for selector in ("#endpoint", "#endpoint-label"):
             self.query_one(selector).display = provider == "openai-compatible"

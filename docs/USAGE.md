@@ -66,7 +66,7 @@ from its dropdown, including the published download size (not required RAM).
 Cloud-only variants are excluded. Choose Custom model to enter another tag.
 Compatible endpoints retain manual model entry. Claude Code and Codex use separate
 native-model dropdowns, with no Ollama or compatible-endpoint choices. Claude offers
-the documented Opus, Sonnet and Haiku aliases; Codex offers documented native model
+the documented active models and aliases below; Codex offers documented native model
 IDs. Default (account) omits a model override. These are bundled choices, not a live
 account entitlement check; availability still depends on the provider and plan.
 Switching harnesses restores only that harness's model, endpoint and API-key
@@ -118,6 +118,31 @@ load the web app's Inter font. SF Mono matches the web console's code-font stack
 where available. The shell does not change your terminal profile or native harness themes.
 The supervisor inherits `OLLAMA_HOST` when first started; set it before your first
 command for a custom server. Existing model-server ownership guards still apply.
+
+### Native Claude models
+
+Checked against Anthropic's [model configuration](https://code.claude.com/docs/en/model-config)
+and [model lifecycle](https://platform.claude.com/docs/en/about-claude/model-deprecations)
+on September 6, 2026. The dropdown includes all active standard Claude API models:
+
+- Fable 5.1 and 5
+- Opus 5, 4.8, 4.7, 4.6 and 4.5
+- Sonnet 5, 4.6 and 4.5
+- Haiku 4.5
+
+Versioned choices save exact API IDs. Latest-family aliases, Best, supported 1M
+context options and Opus plan / Sonnet execution are also available. Retired
+models and restricted research models are not offered. Account and organization
+restrictions still apply; the list is not a live entitlement check.
+
+Fable and some extended-context choices may consume paid usage credits. Native
+interactive Claude handles consent; Anthropic documents that noninteractive
+requests can bill without prompting. Choosing a dropdown entry sends no request.
+
+New Claude runners use Claude Code 2.1.263; Fable 5.1 requires at least 2.1.255.
+Existing containers are unchanged. To upgrade an idle existing agent, use
+`sh41 park NAME` followed by `sh41 redeploy NAME`, retaining its working files and
+identity. Pausing and resuming alone does not upgrade the runner.
 
 ### Command-line workflow
 

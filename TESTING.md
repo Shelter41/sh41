@@ -126,6 +126,14 @@ perform billed inference or assert account access. Native choices are checked
 against [Claude Code model configuration](https://code.claude.com/docs/en/model-config)
 and [Codex models](https://learn.chatgpt.com/docs/models); refresh the bundled UI
 catalog when those provider documents change.
+Claude coverage also checks the complete active-version set, exact alias/ID
+round-tripping into harness arguments, end-of-list keyboard scrolling and Fable
+YAML at both sizes. With `SH41_TEST_DOCKER=1`, the runner smoke test builds the
+Claude image and checks version/help without credentials, network or inference:
+
+```sh
+SH41_TEST_DOCKER=1 .venv/bin/pytest -q tests/test_native_models.py -m docker
+```
 
 The real shell test starts two detached OpenCode terminals without a model prompt,
 attaches and detaches through Textual, resizes the terminal, closes and kills shell
