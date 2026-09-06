@@ -219,3 +219,82 @@ async def test_structured_mcp_editor(tmp_path, monkeypatch):
         form.query_one("#mcp-refs", TextArea).load_text("Authorization=MY_TOKEN")
         await click(pilot, "#mcp-add")
         assert wizard.make_spec().secret_names() == {"MY_TOKEN"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dimensions", [(80, 24), (120, 40)])
+async def test_wizard_directory_completion_and_model_dropdown(tmp_path, monkeypatch, dimensions):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "My project").mkdir()
+    app = Shell(FakeClient(0))
+    async with app.run_test(size=dimensions) as pilot:
+        await settled(pilot, app)
+        app.action_new()
+        await pilot.pause()
+        wizard = app.screen
+        source = wizard.query_one("#source", Input)
+        source.focus()
+        await pilot.press(".", "/", "M", "y")
+        await pilot.pause(0.2)
+        import os
+        if os.environ.get("SH41_TEST_SCREENSHOTS"):
+            app.save_screenshot(f"directory-completion-{dimensions[0]}x{dimensions[1]}.svg",
+                                path=os.environ["SH41_TEST_SCREENSHOTS"])
+        await pilot.press("right")
+        assert source.value == "./My project/"
+        await click(pilot, "#next")
+        selector = wizard.query_one("#installed", Select)
+        selector.focus()
+        await pilot.press("enter")
+        if os.environ.get("SH41_TEST_SCREENSHOTS"):
+            app.save_screenshot(f"model-dropdown-{dimensions[0]}x{dimensions[1]}.svg",
+                                path=os.environ["SH41_TEST_SCREENSHOTS"])
+        await pilot.press("home", "enter")
+        await pilot.pause()
+        assert selector.value == "local:4b"
+        assert wizard.value("model") == "local:4b"
+        assert not wizard.query_one("#model").display
+        assert wizard.make_spec().model == "local:4b"
+        assert wizard.query_one("#next").region.bottom <= dimensions[1]
+
+        selector.value = ""
+        await pilot.pause()
+        assert wizard.query_one("#model").display
+        wizard.query_one("#model", Input).value = "custom:8b"
+        wizard.update_models(["new:4b", "local:4b", "new:4b", None])
+        await pilot.pause()
+        assert wizard.models == ["local:4b", "new:4b"]
+        assert wizard.value("model") == "custom:8b"
+        selector.value = "new:4b"
+        await pilot.pause()
+        assert wizard.value("model") == "new:4b"
+        wizard.update_models([])
+        await pilot.pause()
+        assert selector.value == "" and wizard.query_one("#model").display
+        assert wizard.value("model") == "new:4b"
+
+        wizard.query_one("#provider", Select).value = "openai-compatible"
+        await pilot.pause()
+        assert not selector.display and wizard.query_one("#model").display
+        wizard.query_one("#model", Input).value = "remote-model"
+        wizard.query_one("#provider", Select).value = "ollama"
+        await pilot.pause()
+        assert selector.display and selector.value == ""
+        assert wizard.value("model") == "remote-model"
+        wizard.query_one("#harness", Select).value = "codex"
+        await pilot.pause()
+        assert not selector.display and wizard.query_one("#model").display
+
+
+@pytest.mark.asyncio
+async def test_model_inventory_refreshes_open_wizard():
+    app = Shell(FakeClient(0))
+    async with app.run_test(size=(80, 24)) as pilot:
+        await settled(pilot, app)
+        app.action_new()
+        await pilot.pause()
+        wizard = app.screen
+        wizard.update_models([])
+        app.refresh_models()
+        await settled(pilot, app)
+        assert wizard.models == ["local:4b"]

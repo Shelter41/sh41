@@ -12,6 +12,7 @@ from ..paths import state_home
 from ..spec import parse_yaml
 from .dialogs import Dialog, Prompt
 from .client import background
+from .completion import DirectorySuggester
 
 
 def references(text):
@@ -100,7 +101,7 @@ class Wizard(Dialog):
 
     def __init__(self, models=(), spec=None):
         super().__init__()
-        self.models = models
+        self.models = sorted({model for model in models if isinstance(model, str) and model})
         self.initial = spec
         self.mcp = {k: v.model_dump(exclude_none=True) for k, v in spec.mcp.items()} if spec else {}
         self.step = 0
@@ -117,7 +118,8 @@ class Wizard(Dialog):
                     yield Label("Workspace")
                     yield Input(spec.workspace if spec else "default", id="workspace")
                     yield Label("Source directory (optional)")
-                    yield Input(spec.source.path if spec and spec.source else "", id="source")
+                    yield Input(spec.source.path if spec and spec.source else "", id="source",
+                                suggester=DirectorySuggester())
                 with VerticalScroll(id="inference"):
                     yield Label("Harness")
                     yield Select([(s, s) for s in ("opencode", "claude-code", "codex")],
@@ -126,10 +128,11 @@ class Wizard(Dialog):
                     yield Select([("Ollama", "ollama"), ("Compatible endpoint", "openai-compatible"),
                                   ("Native provider", "native")], allow_blank=False,
                                  value=spec.inference.provider if spec else "ollama", id="provider")
-                    yield Label("Model (native default when blank)")
+                    yield Label("Downloaded Ollama model", id="installed-label")
+                    yield Select(self.model_options(), value=spec.model if spec and spec.model in self.models else "",
+                                 allow_blank=False, id="installed")
+                    yield Label("Model name (native default when blank)", id="model-label")
                     yield Input(spec.model or "" if spec else "", id="model")
-                    if self.models:
-                        yield Select([(m, m) for m in self.models], prompt="Downloaded models", id="installed")
                     yield Label("Compatible endpoint URL", id="endpoint-label")
                     yield Input(spec.inference.base_url or "" if spec else "", id="endpoint")
                     yield Label("API key environment reference (optional)")
@@ -185,8 +188,33 @@ class Wizard(Dialog):
 
     @on(Select.Changed, "#installed")
     def installed(self, event):
-        if event.value is not Select.BLANK:
+        if event.value and event.value is not Select.BLANK:
             self.query_one("#model", Input).value = str(event.value)
+        self.update_model_fields()
+
+    def model_options(self):
+        return [(m, m) for m in self.models] + [
+            ("Custom model..." if self.models else "Custom model... (no models listed)", "")]
+
+    def update_models(self, models):
+        names = sorted({model for model in models if isinstance(model, str) and model})
+        if names == self.models:
+            return
+        self.models = names
+        selector = self.query_one("#installed", Select)
+        selected = selector.value
+        with selector.prevent(Select.Changed):
+            selector.set_options(self.model_options())
+            selector.value = selected if selected in names else ""
+        self.update_model_fields()
+
+    def update_model_fields(self):
+        ollama = self.query_one("#provider", Select).value == "ollama"
+        for ident in ("#installed", "#installed-label"):
+            self.query_one(ident).display = ollama
+        custom = not ollama or not self.query_one("#installed", Select).value
+        for ident in ("#model", "#model-label"):
+            self.query_one(ident).display = custom
 
     @on(Select.Changed, "#harness")
     def harness_changed(self):
@@ -207,6 +235,12 @@ class Wizard(Dialog):
             self.query_one(selector).display = provider == "openai-compatible"
         if provider != "openai-compatible":
             self.query_one("#endpoint", Input).value = ""
+        # Returning from another provider must not silently overwrite its custom model.
+        selector = self.query_one("#installed", Select)
+        model = self.value("model")
+        with selector.prevent(Select.Changed):
+            selector.value = model if model in self.models else ""
+        self.update_model_fields()
 
     @on(Button.Pressed, "#auth-import")
     def auth(self):

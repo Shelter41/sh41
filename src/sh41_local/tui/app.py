@@ -171,6 +171,10 @@ class Shell(App):
             else:
                 self.models = result
                 self.render_models()
+                names = [row.get("name", row.get("model")) for row in result.get("models") or []]
+                for screen in self.screen_stack:
+                    if isinstance(screen, Wizard):
+                        screen.update_models(names)
             self.render_health()
         except (ValueError, RuntimeError, OSError):
             if key == "agents":

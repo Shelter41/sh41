@@ -33,6 +33,12 @@ The shell copies Shelter41's dark-theme color tokens locally and uses a persiste
 Shelter41 header; typography is limited to terminal-supported weight and emphasis,
 with font family and size owned by the terminal emulator, not the application.
 
+The wizard completes source paths with Textual's inline suggester using read-only
+directory scans off the UI thread. It preserves relative and home-directory
+prefixes and suggests directories only. Its Ollama selector follows the existing
+passive model snapshots, preserving explicit/custom choices on refresh; no model
+is started or downloaded by choosing it. Remote/native models remain free text.
+
 DockerProvider builds pinned harness images and creates one restricted container
 per deployment. Each identity has three private host directories mounted into its
 container: workspace, native home and manager control/journals. Host source paths

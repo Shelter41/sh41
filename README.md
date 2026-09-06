@@ -44,6 +44,11 @@ Select an agent and attach to its native terminal, or use the action menu for
 Start, pause/resume, park/redeploy, conversations, run history and export. New
 opens a guided wizard; Import YAML deploys an existing manifest after confirmation.
 The wizard writes the same schema as CLI flags, with Save Only or Save and Start.
+Source directories autocomplete as you type; press Right at the end to accept a
+suggestion. Absolute, relative, and `~/` paths are supported, including spaces.
+The Ollama model dropdown lists downloaded models and refreshes while the wizard
+is open. Choose Custom model to enter another tag. Compatible endpoints and native
+providers retain manual model entry; their remote catalogs are not queried.
 It never overwrites a file, and saved YAML remains available if deployment fails.
 
 Each started agent has its own detached tmux session **inside its Docker sandbox**.
