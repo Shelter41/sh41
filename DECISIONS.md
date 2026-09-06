@@ -22,3 +22,7 @@
 - Support and validate macOS first; Linux host certification, actual reboot and additional provider-account evidence are deferred checks, not local-shell MVP blockers.
 - Copy Shelter41's dark palette into the standalone shell, but inherit the terminal font and leave native harness themes untouched to avoid changing user terminal settings.
 - Complete host directories without filesystem writes and reuse passive Ollama inventory for model choices, retaining custom entry instead of hardcoding provider catalogs or triggering model downloads.
+- Default new coding checkouts to committed-HEAD Git worktrees, while leaving legacy manifests and existing private copies unchanged.
+- Require an explicit direct/copy choice for non-Git folders and transactional acknowledgement of overlapping direct bindings, because multiple agents can otherwise overwrite the same host files.
+- Share Git metadata explicitly for real worktrees rather than claiming repository-level isolation, retaining Docker isolation for other host paths and private agent state.
+- Persist immutable directory bindings and fail ambiguous recovery without resetting files, so container recreation cannot silently replace an agent's work.

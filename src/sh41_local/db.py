@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .paths import private_dir
-from .spec import AgentSpec
+from .spec import AgentSpec, parse_yaml
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS workspaces (slug TEXT PRIMARY KEY);
@@ -50,7 +50,12 @@ CREATE TABLE IF NOT EXISTS operations (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_operation ON operations(resource)
  WHERE status IN ('pending','running');
-PRAGMA user_version=2;
+CREATE TABLE IF NOT EXISTS directory_bindings (
+ agent_id TEXT PRIMARY KEY REFERENCES agents(id), source TEXT, mode TEXT NOT NULL,
+ work TEXT NOT NULL, repo_root TEXT, common_dir TEXT, branch TEXT, start_commit TEXT,
+ status TEXT NOT NULL DEFAULT 'pending'
+);
+PRAGMA user_version=3;
 """
 
 
@@ -63,9 +68,19 @@ class Store:
         with self.connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if version > 2:
+            if version > 3:
                 raise ValueError("Database was written by a newer sh41 version")
             conn.executescript("BEGIN IMMEDIATE;" + SCHEMA + "COMMIT;")
+            # Existing private working directories stay exactly where they are.
+            conn.execute("BEGIN IMMEDIATE")
+            for row in conn.execute("""SELECT a.id, d.spec, d.status FROM agents a JOIN deployments d ON
+                    d.rowid=(SELECT MAX(rowid) FROM deployments WHERE agent_id=a.id)
+                    WHERE a.id NOT IN (SELECT agent_id FROM directory_bindings)""").fetchall():
+                spec = parse_yaml(row["spec"])
+                work = self.root / "agents" / row["id"] / "work"
+                status = "pending" if not work.exists() and row["status"] in {"failed", "provisioning"} else "legacy"
+                conn.execute("""INSERT INTO directory_bindings(agent_id,source,mode,work,status)
+                    VALUES (?,?,'copy',?,?)""", (row["id"], spec.source.path if spec.source else None, str(work), status))
         self.path.chmod(0o600)
 
     @contextmanager
@@ -138,7 +153,54 @@ class Store:
                 raise ValueError("Agent is parked; run sh41 redeploy first")
             return dict(row)
 
-    def reserve(self, spec: AgentSpec) -> tuple[dict, bool]:
+    def binding(self, agent_id):
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM directory_bindings WHERE agent_id=?", (agent_id,)).fetchone()
+            return dict(row) if row else None
+
+    def agent_slug(self, agent_id):
+        with self.connect() as conn:
+            return conn.execute("SELECT slug FROM agents WHERE id=?", (agent_id,)).fetchone()[0]
+
+    def binding_status(self, agent_id, status):
+        with self.connect() as conn:
+            conn.execute("UPDATE directory_bindings SET status=? WHERE agent_id=?", (status, agent_id))
+
+    @staticmethod
+    def binding_rows(conn):
+        return [dict(row) for row in conn.execute("""SELECT b.*,a.slug,
+            COALESCE((SELECT status FROM deployments WHERE agent_id=a.id ORDER BY rowid DESC LIMIT 1),'parked') AS state
+            FROM directory_bindings b JOIN agents a ON a.id=b.agent_id""")]
+
+    def inspect_source(self, path, agent=None):
+        from .directories import inspect_directory, associations, overlap
+        info = inspect_directory(path)
+        if overlap(info["path"], self.root):
+            raise ValueError("Source cannot contain or be inside SH41_LOCAL_HOME")
+        if info.get("common_dir") and overlap(info["common_dir"], self.root):
+            raise ValueError("Repository metadata cannot contain or be inside SH41_LOCAL_HOME")
+        with self.connect() as conn:
+            info["agents"] = associations(info, self.binding_rows(conn), exclude=agent)
+        return info
+
+    def reserve(self, spec: AgentSpec, *, shared_ack=(), allow_shared=False) -> tuple[dict, bool]:
+        from .directories import validate_worktree, associations
+        mode = spec.source.mode if spec.source else "copy"
+        source = str(Path(spec.source.path).expanduser().resolve()) if spec.source else None
+        # Existing ready bindings must survive source deletion for private copies.
+        with self.connect() as conn:
+            old = conn.execute("SELECT b.* FROM directory_bindings b JOIN agents a ON a.id=b.agent_id WHERE a.slug=?",
+                               (spec.agent,)).fetchone()
+        info = None
+        if old:
+            if old["source"] != source or old["mode"] != mode:
+                raise ValueError("An identity's source and mode are immutable; choose a new agent name")
+        if source and (not old or mode == "direct"):
+            info = self.inspect_source(source, spec.agent)
+            if mode == "worktree":
+                validate_worktree(info)
+            elif mode == "direct" and info["kind"] == "repository" and not old:
+                raise ValueError("Repositories require worktree mode for direct working-file access")
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("INSERT OR IGNORE INTO workspaces VALUES (?)", (spec.workspace,))
@@ -147,11 +209,29 @@ class Store:
             agent = conn.execute("SELECT * FROM agents WHERE slug=?", (spec.agent,)).fetchone()
             if agent["harness"] != spec.harness:
                 raise ValueError("An identity's harness is immutable; choose a new agent name")
+            binding = conn.execute("SELECT * FROM directory_bindings WHERE agent_id=?", (agent["id"],)).fetchone()
+            if binding and (binding["source"] != source or binding["mode"] != mode):
+                raise ValueError("An identity's source and mode are immutable; choose a new agent name")
+            if mode == "direct" and not binding:
+                peers = associations(info, self.binding_rows(conn), exclude=spec.agent)
+                conflicts = [p for p in peers if p["shared"]]
+                if not allow_shared and not {p["id"] for p in conflicts}.issubset(set(shared_ack)):
+                    raise ValueError("Shared folder confirmation required: " + ", ".join(
+                        f"{p['agent']} ({p['state']})" for p in conflicts) + ". Inspect again and confirm sharing.")
+            if not binding:
+                work = (source if mode == "direct" else str(self.root / "worktrees" / spec.agent)
+                        if mode == "worktree" else str(self.root / "agents" / agent["id"] / "work"))
+                conn.execute("""INSERT INTO directory_bindings
+                    (agent_id,source,mode,work,repo_root,common_dir,branch,start_commit)
+                    VALUES (?,?,?,?,?,?,?,?)""", (agent["id"], source, mode, work,
+                    info.get("repo_root") if info else None, info.get("common_dir") if info else None,
+                    f"agent/{spec.agent}" if mode == "worktree" else None,
+                    info.get("head") if mode == "worktree" else None))
             existing = conn.execute(
                 "SELECT * FROM deployments WHERE agent_id=? AND ended_at IS NULL", (agent["id"],)
             ).fetchone()
             if existing:
-                if existing["fingerprint"] != spec.fingerprint():
+                if parse_yaml(existing["spec"]).fingerprint() != spec.fingerprint():
                     raise ValueError("Agent already deployed with another spec; park it first")
                 return dict(existing), False
             ident = str(uuid.uuid4())

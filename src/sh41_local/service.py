@@ -14,8 +14,9 @@ class AgentService:
         self.store = Store(root)
         self.provider = provider if provider is not None else DockerProvider(root)
 
-    def deploy(self, spec: AgentSpec, secrets: dict | None = None):
-        deployment, created = self.store.reserve(spec)
+    def deploy(self, spec: AgentSpec, secrets: dict | None = None, *, shared_ack=(), allow_shared=False):
+        spec = spec.resolved(Path.cwd(), check=False)
+        deployment, created = self.store.reserve(spec, shared_ack=shared_ack, allow_shared=allow_shared)
         if not created:
             return deployment
         try:
@@ -111,10 +112,13 @@ class AgentService:
 
     def dispatch(self, request: dict):
         operation = request.get("op")
+        if operation == "inspect-source":
+            return self.store.inspect_source(request["path"], request.get("agent"))
         if operation == "ping":
             return {"version": 1}
         if operation == "deploy":
-            return self.deploy(AgentSpec.model_validate(request["spec"]), request.get("secrets"))
+            return self.deploy(AgentSpec.model_validate(request["spec"]), request.get("secrets"),
+                               shared_ack=request.get("shared_ack", ()), allow_shared=request.get("allow_shared", False))
         if operation == "spec":
             return parse_yaml(self.store.deployment(request["agent"], latest=True)["spec"]).model_dump()
         if operation == "start":
@@ -179,10 +183,13 @@ class AgentService:
             return self.store.session(slug, new=operation == "new-session", resume=request.get("session_id"))
         if operation == "export":
             agent = self.store.agent(request["agent"])
+            binding = self.store.binding(agent["id"])
+            if binding["mode"] == "direct":
+                raise ValueError("Direct-folder files already reside in the selected host directory; no export is needed")
             latest = self.store.deployment(request["agent"], latest=True)
             if latest["ended_at"] is None and latest["status"] != "paused":
                 raise ValueError("Pause the agent before exporting a consistent copy")
-            work = self.root / "agents" / agent["id"] / "work"
+            work = Path(binding["work"])
             export(work, Path(request["output"]))
             return {"output": request["output"]}
         if operation == "sessions":

@@ -14,7 +14,7 @@ processes. A new worker Start RPC creates/reuses detached native execution witho
 submitting a turn or reserving a writer. Existing CLI deployment remains lazy.
 
 The control plane accepts immutable-ID background jobs and serializes mutations
-per agent, with SQLite v2 operation records and one active job per resource. Only
+per agent, with SQLite operation records and one active job per resource. Only
 kind, resource, timestamps, status and redacted progress are persisted, never job
 payloads or credentials. Accepted jobs run in supervisor threads after the client
 disconnects. Supervisor startup marks unfinished jobs interrupted and retains the
@@ -39,11 +39,40 @@ prefixes and suggests directories only. Its Ollama selector follows the existing
 passive model snapshots, preserving explicit/custom choices on refresh; no model
 is started or downloaded by choosing it. Remote/native models remain free text.
 
+Directory inspection is a read-only supervisor operation backed by Git discovery
+and the local binding registry. The wizard debounces inspection, discards stale
+replies and requires a non-Git access choice. YAML adds source.mode
+(worktree/direct/copy); omission retains legacy copy semantics. CLI authoring
+detects repositories and requires explicit non-Git choices outside interactive
+terminals. Save Only performs no directory materialization.
+
+SQLite v3 adds immutable per-identity bindings: source, working path, mode,
+repository/common directory, branch, starting commit and preparation state.
+Migration backfills existing private copies in place. Normalized-spec comparisons
+preserve idempotent deployment across the additive default field. Direct-folder
+sharing is checked under the reservation transaction, including parent/child and
+filesystem aliases. Acknowledgements are launch-only, not persisted in YAML;
+new conflicts require renewed confirmation unless automation explicitly allows
+shared writes. Associations include paused/parked bindings and are local-state scoped.
+
 DockerProvider builds pinned harness images and creates one restricted container
-per deployment. Each identity has three private host directories mounted into its
-container: workspace, native home and manager control/journals. Host source paths
-are copied, never mounted. Workspace groups are metadata, not shared filesystems.
-Parking deletes only compute; redeployment reuses the three directories.
+per deployment. Working files always appear at /workspace/agent; private harness
+home and control/journals retain their existing mounts. Worktree mode creates
+agent/<name> from committed HEAD under state/worktrees/<name>, mounting the Git
+common directory at its host absolute path so linked-worktree pointers resolve
+inside Docker. Original checkout files are not mounted, but repository metadata,
+refs, configuration and history are shared and writable. Git author settings use
+container environment variables, never shared config writes. Host setup disables
+hooks/fsmonitor and rejects configured checkout filters and submodule layouts.
+
+Direct mode mounts the selected non-Git folder read-write with no initialization
+or permission changes. Copy mode retains exclusions and private snapshot behavior,
+without initializing Git for new non-Git copies. Worktree creation uses a per-repo
+file lock and durable preparation states. Collisions and ambiguous interrupted
+checkouts fail without resetting files; clean completed checkouts can be recovered.
+Missing/moved ready worktrees require repair. Parking deletes only compute;
+redeploy/resume reuse and validate bindings. Source/mode changes require another
+identity. Workspace groups remain metadata, not shared filesystems.
 
 Docker exec RPC reaches the container manager's Unix socket. This avoids published
 agent ports and backend callbacks. The manager owns tmux and native process/session

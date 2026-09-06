@@ -4,7 +4,7 @@ from pathlib import Path
 
 from textual import on, work
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, ContentSwitcher, Input, Label, Select, Static, TextArea
+from textual.widgets import Button, Checkbox, ContentSwitcher, Input, Label, Select, Static, TextArea
 
 from ..credentials import import_native
 from ..manifests import build_spec, write_manifest
@@ -106,6 +106,9 @@ class Wizard(Dialog):
         self.mcp = {k: v.model_dump(exclude_none=True) for k, v in spec.mcp.items()} if spec else {}
         self.step = 0
         self.spec = None
+        self.source_info = None
+        self.inspection_key = None
+        self.inspection_timer = None
 
     def compose(self):
         spec = self.initial
@@ -120,6 +123,10 @@ class Wizard(Dialog):
                     yield Label("Source directory (optional)")
                     yield Input(spec.source.path if spec and spec.source else "", id="source",
                                 suggester=DirectorySuggester())
+                    yield Static("", id="source-info", markup=False)
+                    yield Select([("Original folder", "direct"), ("Private copy", "copy")],
+                                 prompt="Choose folder access", id="source-mode")
+                    yield Checkbox("Allow shared edits with the listed agents", id="shared-folder")
                 with VerticalScroll(id="inference"):
                     yield Label("Harness")
                     yield Select([(s, s) for s in ("opencode", "claude-code", "codex")],
@@ -162,13 +169,81 @@ class Wizard(Dialog):
         self.update_step()
         self.update_mcp()
         self.update_provider()
+        self.source_changed()
+
+    @on(Input.Changed, "#source")
+    @on(Input.Changed, "#name")
+    def source_changed(self):
+        if not self.is_mounted:
+            return
+        self.source_info = None
+        self.inspection_key = (self.value("source"), self.value("name"))
+        self.query_one("#shared-folder", Checkbox).value = False
+        self.query_one("#shared-folder").display = False
+        self.query_one("#source-mode", Select).clear()
+        self.query_one("#source-mode").display = False
+        if self.inspection_timer:
+            self.inspection_timer.stop()
+        self.query_one("#source-info", Static).update("Checking directory..." if self.value("source") else "")
+        if self.value("source"):
+            self.inspection_timer = self.set_timer(0.25, self.inspect_source)
+
+    @work(exit_on_error=False)
+    async def inspect_source(self):
+        key = self.inspection_key
+        try:
+            info = await background(self.app.client.call, {"op": "inspect-source", "path": key[0], "agent": key[1]})
+            if key != self.inspection_key or not self.is_mounted:
+                return
+            from ..directories import describe, validate_worktree
+            if info["kind"] == "repository":
+                await background(validate_worktree, info)
+            if key != self.inspection_key or not self.is_mounted:
+                return
+            self.source_info = info
+            peers = "\n".join(f"{p['agent']}: {p['state']}, {p['mode']}" +
+                               (" (shared files)" if p["shared"] else " (separate working files)") for p in info["agents"])
+            self.query_one("#source-info", Static).update(describe(info, key[1], state_home()) +
+                                                       ("\nOther agents:\n" + peers if peers else ""))
+            self.query_one("#source-mode").display = info["kind"] != "repository"
+            self.source_mode_changed()
+        except (ValueError, RuntimeError, OSError) as exc:
+            if key == self.inspection_key and self.is_mounted:
+                self.query_one("#source-info", Static).update(str(exc))
+
+    @on(Select.Changed, "#source-mode")
+    def source_mode_changed(self):
+        self.query_one("#wizard-error", Static).update("")
+        self.query_one("#shared-folder", Checkbox).value = False
+        self.query_one("#shared-folder").display = bool(self.source_info and
+            self.query_one("#source-mode", Select).value == "direct" and
+            any(p["shared"] for p in self.source_info["agents"]))
+
+    @on(Checkbox.Changed, "#shared-folder")
+    def sharing_changed(self):
+        self.query_one("#wizard-error", Static).update("")
+
+    def source_mode(self):
+        if not self.value("source"):
+            return "copy"
+        if not self.source_info:
+            raise ValueError("Wait for a valid directory inspection before continuing")
+        if self.source_info["kind"] == "repository":
+            return "worktree"
+        mode = self.query_one("#source-mode", Select).value
+        if mode is Select.NULL:
+            raise ValueError("Choose Original folder or Private copy")
+        if (mode == "direct" and any(p["shared"] for p in self.source_info["agents"])
+                and not self.query_one("#shared-folder", Checkbox).value):
+            raise ValueError("Confirm shared edits with the listed agents or choose Private copy")
+        return mode
 
     def value(self, ident):
         return self.query_one("#" + ident, Input).value.strip()
 
     def make_spec(self):
         return build_spec(name=self.value("name"), workspace=self.value("workspace"),
-            source=self.value("source"), harness=self.query_one("#harness", Select).value,
+            source=self.value("source"), source_mode=self.source_mode(), harness=self.query_one("#harness", Select).value,
             provider=self.query_one("#provider", Select).value, model=self.value("model"),
             base_url=self.value("endpoint"), api_key_env=self.value("key-env"),
             instructions=self.value("instructions"), mcp=self.mcp)
@@ -188,7 +263,7 @@ class Wizard(Dialog):
 
     @on(Select.Changed, "#installed")
     def installed(self, event):
-        if event.value and event.value is not Select.BLANK:
+        if event.value and event.value is not Select.NULL:
             self.query_one("#model", Input).value = str(event.value)
         self.update_model_fields()
 
@@ -268,7 +343,7 @@ class Wizard(Dialog):
             try:
                 if self.step == 0:
                     build_spec(name=self.value("name"), workspace=self.value("workspace"),
-                               source=self.value("source"), harness="codex")
+                               source=self.value("source"), source_mode=self.source_mode(), harness="codex")
                 if self.step >= 1:
                     self.spec = self.make_spec()
                 if self.step == 2:
@@ -289,7 +364,8 @@ class Wizard(Dialog):
             try:
                 destination = Path(self.value("destination")).expanduser()
                 write_manifest(self.spec, destination)
-                self.dismiss({"spec": self.spec, "deploy": ident == "deploy", "path": str(destination)})
+                ack = [p["id"] for p in self.source_info["agents"] if p["shared"]] if self.source_info else []
+                self.dismiss({"spec": self.spec, "deploy": ident == "deploy", "path": str(destination), "shared_ack": ack})
             except FileExistsError:
                 self.query_one("#wizard-error", Static).update("Manifest exists; choose another destination")
             except (ValueError, OSError) as exc:

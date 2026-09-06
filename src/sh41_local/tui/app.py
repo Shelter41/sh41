@@ -300,7 +300,7 @@ class Shell(App):
         if result:
             self.q("#notice", Static).update("Saved " + result["path"])
             if result["deploy"]:
-                self.submit_job("deploy-start", spec=result["spec"])
+                self.submit_job("deploy-start", spec=result["spec"], shared_ack=result.get("shared_ack", []))
 
     def action_import_yaml(self):
         if self.screen is self.home:
@@ -312,8 +312,22 @@ class Shell(App):
             return
         try:
             spec = await background(import_spec, path)
-            self.push_screen(Prompt(f"Deploy and start {spec.agent} from this YAML?", confirm=True),
-                             lambda yes: self.submit_job("deploy-start", spec=spec) if yes else None)
+            notice, ack = f"Deploy and start {spec.agent} from this YAML?", []
+            if spec.source:
+                info = await background(self.client.call, {"op": "inspect-source", "path": spec.source.path, "agent": spec.agent})
+                if spec.source.mode == "worktree":
+                    from ..directories import describe
+                    from ..paths import state_home
+                    notice += "\n" + describe(info, spec.agent, state_home())
+                elif spec.source.mode == "direct":
+                    notice += "\nOriginal folder: agent edits host files, including hidden files."
+                    ack = [p["id"] for p in info["agents"] if p["shared"]]
+                if info["agents"]:
+                    notice += "\nOther agents: " + ", ".join(f"{p['agent']} ({p['mode']}, {p['state']})" for p in info["agents"])
+                if ack:
+                    notice += "\nAllow shared writes with these agents?"
+            self.push_screen(Prompt(notice, confirm=True),
+                             lambda yes: self.submit_job("deploy-start", spec=spec, shared_ack=ack) if yes else None)
         except (ValueError, OSError) as exc:
             self.notify(str(exc), severity="error")
 

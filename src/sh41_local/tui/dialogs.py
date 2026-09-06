@@ -24,6 +24,10 @@ class Dialog(ModalScreen):
 
 
 class Prompt(Dialog):
+    DEFAULT_CSS = """
+    Prompt .dialog-title { max-height: 12; overflow-y: auto; }
+    """
+
     def __init__(self, title, *, initial="", confirm=False):
         super().__init__()
         self.heading, self.initial, self.confirm = title, initial, confirm

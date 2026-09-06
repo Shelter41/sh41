@@ -1,0 +1,10 @@
+version: 1
+agent: worktree-reviewer
+harness: codex
+workspace: development
+source:
+  provider: local
+  path: /absolute/path/to/repository
+  mode: worktree
+inference:
+  provider: native

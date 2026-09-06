@@ -39,7 +39,7 @@ def test_upgrade_preserves_identity_and_interrupts_only_active_jobs(tmp_path):
     assert store.operation("old")["status"] == "interrupted"
     assert store.operation("done")["status"] == "completed"
     with store.connect() as conn:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_job_outlives_submit_and_is_not_replayed(tmp_path, monkeypatch):

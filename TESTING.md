@@ -106,3 +106,20 @@ processes, verifies a running turn finishes, reopens the dashboard and checks
 identities and native processes remain. Native account tests additionally verify
 explicit idempotent Start for Claude/Codex without writer acquisition or a run.
 These tests never reboot the Mac, restart Docker Desktop or touch SaaS services.
+
+## Coding Directory Acceptance
+
+```sh
+.venv/bin/pytest -q tests/test_directories.py tests/test_tui.py tests/test_spec_state.py
+SH41_TEST_DOCKER=1 .venv/bin/pytest -q tests/test_directories.py tests/test_workspace_docker.py
+```
+
+Directory tests exercise committed-only worktrees, nested/linked Git discovery,
+dirty files, bare/unborn/submodule rejection, branch collisions, private non-Git
+copies, direct-folder writes, alias/parent-child associations, transactional
+sharing races, legacy SQLite migration, and non-destructive interrupted setup.
+Wizard tests verify explicit access choices, sharing acknowledgement, stale/error
+inspection results and Save Only at 80x24 and 120x40. Docker acceptance creates two
+real worktree agents and two acknowledged direct-folder agents, commits inside
+the sandbox, verifies host/source visibility, and recreates the same worktree.
+These checks need no provider usage, account imports or Mac reboot.

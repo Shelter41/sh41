@@ -9,6 +9,8 @@ SaaS backend, Postgres, Redis, or API server is required.
 **Status: pre-release MVP.** Implemented, with unit and real Docker/harness tests.
 See [PLAN.md](PLAN.md) and [SHELL_PLAN.md](SHELL_PLAN.md) for implementation and acceptance records. This is
 an independent project, not a local mode of the cloud CLI.
+The subsequent [coding-directory plan](CODING_DIRECTORY_PLAN.md) records worktree,
+direct-folder and sharing acceptance.
 
 ## Install
 
@@ -46,6 +48,12 @@ opens a guided wizard; Import YAML deploys an existing manifest after confirmati
 The wizard writes the same schema as CLI flags, with Save Only or Save and Start.
 Source directories autocomplete as you type; press Right at the end to accept a
 suggestion. Absolute, relative, and `~/` paths are supported, including spaces.
+Selecting a Git checkout proposes a new worktree and `agent/<agent-name>` branch
+from its committed `HEAD`; uncommitted changes stay in the original checkout.
+Selecting a non-Git folder requires Original folder (read-write) or Private copy.
+Other agents using the repository/folder appear with their mode and recorded
+status. Shared original-folder edits require confirmation, including overlapping
+parent/child folders and paused/parked agents that can later resume.
 The Ollama model dropdown lists downloaded models and refreshes while the wizard
 is open. Choose Custom model to enter another tag. Compatible endpoints and native
 providers retain manual model entry; their remote catalogs are not queried.
@@ -159,6 +167,7 @@ agent: reviewer
 harness: opencode
 workspace: development
 source:
+  mode: worktree
   provider: local
   path: ./project
 model: qwen3:4b-instruct
@@ -197,6 +206,44 @@ OAuth is out of scope. Header references supply the entire value, including any
 See [examples/](examples/) for minimal manifests. Without `source`, an agent gets
 an empty Git workspace. Workspace names group agents; they do not share files.
 
+### Directory Modes
+
+| `source.mode` | Behavior |
+| --- | --- |
+| `worktree` | A dedicated Git worktree and branch from the selected checkout's committed HEAD; selecting a subdirectory uses the repository root |
+| `direct` | Edit the original non-Git folder in place, including hidden files; no Git initialization |
+| `copy` | Private copy with exclusions; non-Git sources stay non-Git |
+
+The wizard and `launch --source <repo>` choose worktree mode for repositories.
+For a non-Git folder, interactive CLI launches prompt; scripts must specify
+`--source-mode copy` or `--source-mode direct`. `--source-mode worktree` is also
+available explicitly. YAML without `source.mode` retains legacy copy semantics.
+
+```sh
+sh41 launch editor --harness codex --source ~/Projects/app
+sh41 launch files --harness codex --source ~/Documents/task --source-mode copy
+sh41 launch shared --harness codex --source ~/Documents/task --source-mode direct --allow-shared-folder
+sh41 deploy shared.yaml --allow-shared-folder
+```
+
+`--allow-shared-folder` explicitly acknowledges shared writes for automation.
+Interactive confirmation acknowledges the listed agents; launch reservation
+rechecks sharing and rejects newly discovered conflicts. A failed shell job can
+be retried by importing its saved YAML and confirming the updated agent list.
+Detection covers this `SH41_LOCAL_HOME`, not arbitrary editors or other tools.
+Save Only / `--write-only` never creates a branch, worktree, copy, or container.
+
+Worktrees live in `$SH41_LOCAL_HOME/worktrees/<agent-name>` (by default
+`~/.local/share/sh41-local/worktrees/<agent-name>`). Existing branches or unowned
+destinations are never overwritten. Repositories need a commit; bare repositories,
+submodules, and configured host checkout filters are currently unsupported.
+
+**Worktrees share Git metadata, refs, configuration, history, and remotes with the
+original repository. They are not a repository security boundary.** Tracked
+secrets remain available, and agents can change shared Git metadata. Only use
+repositories you trust with these agents. Direct mode grants read-write access
+to every file inside the selected folder, including `.env` and other hidden files.
+
 ## Manage Agents
 
 | Command | Behavior |
@@ -216,22 +263,31 @@ Run and attach automatically resume a paused agent. Parked agents need redeploy.
 Only one active deployment, conversation, and submitted run exist per identity.
 Changing harness requires a new identity: native conversation formats are not
 interchangeable. To change other manifest settings, park, edit YAML, and deploy.
-Changing `source` does not replace an identity's existing working files.
+An identity's source path and mode are immutable; choose a new agent name to
+change either. Existing agents keep their private working copies after upgrade.
 
-The original source is never an agent mount. sh41 copies tracked and nonignored
+In copy mode, the original source is never an agent mount. sh41 copies tracked and nonignored
 untracked working files, preserves dirty changes, and creates `agent/<name>`.
 Git objects are independent and the origin remote is removed. `.env*`, caches,
 and external/absolute symlinks are excluded or rejected. **Git history is copied**;
 secrets committed in history remain accessible. Submodule materialization and
 automatic dependency installation are not supported. Export omits Git metadata,
-credentials stored outside the workspace, and the excluded paths.
+credentials stored outside the workspace, and the excluded paths. Worktree mode
+instead checks out committed tracked files without copy exclusions. Direct-mode
+files already live on the host, so `export` is not applicable.
 
 ## Persistence And Boundaries
 
 State lives under `~/.local/share/sh41-local`; `SH41_LOCAL_HOME` selects another
 short, private directory. SQLite stores metadata and normalized run events. Each
-identity has separate working files, native harness home, and manager journals.
-No container can access the host SQLite database or another agent's directories.
+identity retains a working-directory binding, private native harness home, and
+manager journals. Containers cannot access the host SQLite database or another
+agent's private home/journals. Direct-folder agents can share working files;
+worktree agents share repository metadata but have separate working files.
+Pause, park, and redeploy retain these bindings and do not delete branches or
+worktrees. Missing/moved worktrees require repair, never automatic replacement.
+Interrupted setup resumes only when nothing was created or the registered
+checkout is complete and clean; ambiguous files are preserved with a repair error.
 
 Native conversations survive pause, park, and container recreation. Direct TUI
 turns remain in native harness history; they are not mirrored as separate sh41

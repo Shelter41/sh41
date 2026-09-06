@@ -1,6 +1,6 @@
 import pytest
 from click.testing import CliRunner
-from textual.widgets import Button, DataTable, Input, Select, Static
+from textual.widgets import Button, Checkbox, DataTable, Input, Select, Static
 
 from sh41_local.cli import main
 from sh41_local.spec import parse_yaml
@@ -27,6 +27,9 @@ class FakeClient:
         if payload["op"] == "models-snapshot":
             return {"state": "ready", "owned": False, "url": "http://localhost:11434", "version": "test",
                     "models": [{"name": "local:4b", "size": 1024 ** 3}], "loaded": []}
+        if payload["op"] == "inspect-source":
+            from sh41_local.directories import inspect_directory
+            return dict(inspect_directory(payload["path"]), agents=[])
         return []
 
     def submit(self, kind, **fields):
@@ -242,6 +245,8 @@ async def test_wizard_directory_completion_and_model_dropdown(tmp_path, monkeypa
                                 path=os.environ["SH41_TEST_SCREENSHOTS"])
         await pilot.press("right")
         assert source.value == "./My project/"
+        await pilot.pause(0.5)
+        wizard.query_one("#source-mode", Select).value = "copy"
         await click(pilot, "#next")
         selector = wizard.query_one("#installed", Select)
         selector.focus()
@@ -298,3 +303,149 @@ async def test_model_inventory_refreshes_open_wizard():
         app.refresh_models()
         await settled(pilot, app)
         assert wizard.models == ["local:4b"]
+
+
+async def directory_settled(pilot, wizard):
+    for _ in range(50):
+        await pilot.pause(0.05)
+        if wizard.source_info:
+            return
+    pytest.fail("Directory inspection did not complete")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dimensions", [(80, 24), (120, 40)])
+async def test_wizard_non_git_requires_choice_and_shared_ack(tmp_path, monkeypatch, dimensions):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "project"
+    folder.mkdir()
+
+    class SharingClient(FakeClient):
+        def call(self, payload):
+            result = super().call(payload)
+            if payload["op"] == "inspect-source":
+                result["agents"] = [dict(id="peer-id", agent="editor", mode="direct", state="paused", shared=True)]
+            return result
+
+    client = SharingClient(0)
+    app = Shell(client)
+    async with app.run_test(size=dimensions) as pilot:
+        await settled(pilot, app)
+        app.action_new()
+        await pilot.pause()
+        wizard = app.screen
+        wizard.query_one("#source", Input).value = str(folder)
+        await directory_settled(pilot, wizard)
+        await click(pilot, "#next")
+        assert wizard.step == 0
+        assert "Choose" in str(wizard.query_one("#wizard-error", Static).content)
+        assert "editor: paused" in str(wizard.query_one("#source-info", Static).content)
+        selector = wizard.query_one("#source-mode", Select)
+        selector.value = "direct"
+        await pilot.pause()
+        assert wizard.query_one("#shared-folder").display
+        await click(pilot, "#next")
+        assert wizard.step == 0
+        assert "Confirm shared" in str(wizard.query_one("#wizard-error", Static).content)
+        checkbox = wizard.query_one("#shared-folder", Checkbox)
+        checkbox.focus()
+        await pilot.press("space")
+        import os
+        if os.environ.get("SH41_TEST_SCREENSHOTS"):
+            app.save_screenshot(f"shared-directory-{dimensions[0]}x{dimensions[1]}.svg",
+                                path=os.environ["SH41_TEST_SCREENSHOTS"])
+        await click(pilot, "#next")
+        assert wizard.step == 1
+        await click(pilot, "#back")
+        assert selector.value == "direct" and checkbox.value
+        await click(pilot, "#next")
+        wizard.query_one("#model", Input).value = "local:4b"
+        await click(pilot, "#next")
+        await click(pilot, "#next")
+        await click(pilot, "#deploy")
+        assert client.submissions[0][1]["shared_ack"] == ["peer-id"]
+        assert client.submissions[0][1]["spec"].source.mode == "direct"
+        assert not list(folder.iterdir())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dimensions", [(80, 24), (120, 40)])
+async def test_wizard_repository_notice_and_save_only(tmp_path, monkeypatch, dimensions):
+    import subprocess
+    monkeypatch.chdir(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for args in (["init"], ["-c", "user.name=Test", "-c", "user.email=test@example.com",
+                           "commit", "--allow-empty", "-m", "initial"]):
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    (repo / "dirty").write_text("local only")
+    app = Shell(FakeClient(0))
+    async with app.run_test(size=dimensions) as pilot:
+        await settled(pilot, app)
+        app.action_new()
+        await pilot.pause()
+        wizard = app.screen
+        wizard.query_one("#source", Input).value = str(repo)
+        await directory_settled(pilot, wizard)
+        notice = str(wizard.query_one("#source-info", Static).content)
+        assert "New worktree" in notice and "Uncommitted changes stay" in notice
+        assert not wizard.query_one("#source-mode").display
+        wizard.query_one("#source-info").scroll_visible()
+        await pilot.pause()
+        import os
+        if os.environ.get("SH41_TEST_SCREENSHOTS"):
+            app.save_screenshot(f"repository-directory-{dimensions[0]}x{dimensions[1]}.svg",
+                                path=os.environ["SH41_TEST_SCREENSHOTS"])
+        await click(pilot, "#next")
+        wizard.query_one("#harness", Select).value = "codex"
+        await pilot.pause()
+        await click(pilot, "#next")
+        await click(pilot, "#next")
+        await click(pilot, "#save")
+        manifest = next(tmp_path.glob("*.yaml"))
+        assert parse_yaml(manifest.read_text()).source.mode == "worktree"
+        assert not app.client.submissions
+        listed = subprocess.run(["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+                                check=True, capture_output=True, text=True).stdout
+        assert listed.count("worktree ") == 1
+
+
+@pytest.mark.asyncio
+async def test_directory_inspection_failure_and_stale_reply(tmp_path):
+    import threading
+    release, entered = threading.Event(), threading.Event()
+    one, two = tmp_path / "one", tmp_path / "two"
+    one.mkdir()
+    two.mkdir()
+
+    class SlowDirectoryClient(FakeClient):
+        def call(self, payload):
+            if payload["op"] == "inspect-source" and payload["path"] == str(one):
+                entered.set()
+                release.wait(10)
+            return super().call(payload)
+
+    try:
+        app = Shell(SlowDirectoryClient(0))
+        async with app.run_test(size=(80, 24)) as pilot:
+            await settled(pilot, app)
+            app.action_new()
+            await pilot.pause()
+            wizard = app.screen
+            field = wizard.query_one("#source", Input)
+            field.value = str(one)
+            await pilot.pause(0.4)
+            assert entered.is_set()
+            field.value = str(two)
+            await directory_settled(pilot, wizard)
+            assert wizard.source_info["path"] == str(two)
+            release.set()
+            await pilot.pause(0.2)
+            assert wizard.source_info["path"] == str(two)
+            field.value = str(tmp_path / "missing")
+            await pilot.pause(0.5)
+            await click(pilot, "#next")
+            assert wizard.step == 0 and wizard.source_info is None
+            assert "existing" in str(wizard.query_one("#source-info", Static).content)
+    finally:
+        release.set()

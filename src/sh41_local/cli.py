@@ -55,23 +55,49 @@ def emit(value, as_json=False):
             click.echo("  ".join(str(row.get(key) or "-").ljust(widths[key]) for key in keys))
 
 
-def deploy_spec(spec: AgentSpec):
+def source_notice(spec):
+    if not spec.source:
+        return None
+    from .directories import describe
+    from .paths import state_home
+    info = call({"op": "inspect-source", "path": spec.source.path, "agent": spec.agent})
+    if spec.source.mode == "worktree":
+        click.echo(describe(info, spec.agent, state_home()), err=True)
+    elif spec.source.mode == "direct":
+        click.echo(f"Original folder: {spec.source.path}. Agent edits affect host files, including hidden files.", err=True)
+    else:
+        click.echo(f"Private copy of {spec.source.path}; original files stay unchanged.", err=True)
+    for peer in info["agents"]:
+        click.echo(f"Agent {peer['agent']}: {peer['state']}, {peer['mode']}" +
+                   (" (shared files)" if peer["shared"] else " (separate working files)"), err=True)
+    return info
+
+
+def deploy_spec(spec: AgentSpec, *, allow_shared=False):
     missing = spec.secret_names() - os.environ.keys()
     if missing:
         raise click.ClickException("Missing environment variables: " + ", ".join(sorted(missing)))
-    return call({"op": "deploy", "spec": spec.model_dump(),
+    info = source_notice(spec)
+    conflicts = [p["id"] for p in info["agents"] if p["shared"]] if info and spec.source.mode == "direct" else []
+    if conflicts and not allow_shared:
+        if not os.isatty(0):
+            raise click.ClickException("Shared folder confirmation required; use --allow-shared-folder to acknowledge shared writes")
+        click.confirm("Allow this agent to edit the same files as the listed agents?", abort=True)
+    return call({"op": "deploy", "spec": spec.model_dump(), "shared_ack": conflicts,
+                 "allow_shared": allow_shared,
                  "secrets": {key: os.environ[key] for key in spec.secret_names()}})
 
 
 @main.command()
 @click.argument("manifest", type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def deploy(manifest):
+@click.option("--allow-shared-folder", is_flag=True)
+def deploy(manifest, allow_shared_folder):
     """Deploy an agent from YAML."""
     try:
         spec = parse_yaml(manifest.read_text()).resolved(manifest.resolve().parent)
     except (ValueError, OSError) as exc:
         raise click.ClickException(str(exc)) from None
-    emit(deploy_spec(spec))
+    emit(deploy_spec(spec, allow_shared=allow_shared_folder))
 
 
 @main.command()
@@ -79,6 +105,8 @@ def deploy(manifest):
 @click.option("--harness", type=click.Choice(["opencode", "claude-code", "codex"]), default="opencode")
 @click.option("--workspace", default="default", show_default=True)
 @click.option("--source", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--source-mode", type=click.Choice(["worktree", "direct", "copy"]))
+@click.option("--allow-shared-folder", is_flag=True)
 @click.option("--model")
 @click.option("--ollama", is_flag=True)
 @click.option("--base-url")
@@ -87,7 +115,7 @@ def deploy(manifest):
 @click.option("--mcp", "servers", nargs=2, multiple=True, metavar="NAME JSON")
 @click.option("--output", type=click.Path(dir_okay=False, path_type=Path))
 @click.option("--write-only", is_flag=True)
-def launch(name, harness, workspace, source, model, ollama, base_url, api_key_env,
+def launch(name, harness, workspace, source, source_mode, allow_shared_folder, model, ollama, base_url, api_key_env,
            instructions, servers, output, write_only):
     """Generate YAML from flags and deploy; NAME is optional."""
     if ollama and base_url:
@@ -95,13 +123,32 @@ def launch(name, harness, workspace, source, model, ollama, base_url, api_key_en
     name = name or f"{harness}-{secrets.token_hex(2)}"
     from .manifests import build_spec, write_manifest
     try:
+        if source_mode and not source:
+            raise ValueError("--source-mode requires --source")
+        if source:
+            from .directories import inspect_directory, validate_worktree
+            info = inspect_directory(source)
+            if source_mode is None:
+                if info["kind"] == "repository":
+                    source_mode = "worktree"
+                elif os.isatty(0):
+                    source_mode = click.prompt("Folder access", type=click.Choice(["copy", "direct"]), default="copy")
+                else:
+                    raise ValueError("Non-Git folders require --source-mode copy or --source-mode direct")
+            if source_mode == "worktree":
+                validate_worktree(info)
+            if source_mode == "direct" and info["kind"] == "repository":
+                raise ValueError("Use worktree mode for a repository")
         if len({name for name, _ in servers}) != len(servers):
             raise ValueError("MCP names must be unique")
         spec = build_spec(name=name, harness=harness, workspace=workspace, source=source,
+            source_mode=source_mode or "copy",
             model=model, provider="ollama" if ollama else "openai-compatible" if base_url else "native",
             base_url=base_url, api_key_env=api_key_env, instructions=instructions,
             mcp={name: json.loads(raw) for name, raw in servers})
         destination = output or Path(f"{spec.agent}.yaml")
+        if write_only:
+            source_notice(spec)
         write_manifest(spec, destination)
     except FileExistsError:
         raise click.ClickException("Manifest already exists; use deploy or another --output") from None
@@ -110,7 +157,7 @@ def launch(name, harness, workspace, source, model, ollama, base_url, api_key_en
     click.echo(f"Wrote {destination}")
     if not write_only:
         click.echo("Preparing the agent; first use builds an image and may download a model.", err=True)
-        emit(deploy_spec(spec))
+        emit(deploy_spec(spec, allow_shared=allow_shared_folder))
 
 
 @main.command()

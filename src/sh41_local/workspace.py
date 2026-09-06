@@ -47,7 +47,7 @@ def copy_entry(source: Path, destination: Path, root: Path):
         shutil.copy2(source, destination, follow_symlinks=False)
 
 
-def prepare(root: Path, agent_id: str, slug: str, source: Path | None) -> Path:
+def prepare(root: Path, agent_id: str, slug: str, source: Path | None, *, initialize_non_git=True) -> Path:
     directory = private_dir(root / "agents" / agent_id)
     work = directory / "work"
     if work.exists():
@@ -83,9 +83,11 @@ def prepare(root: Path, agent_id: str, slug: str, source: Path | None) -> Path:
                 for child in source.iterdir():
                     if not ignored(Path(child.name)):
                         copy_entry(child, target / child.name, source)
-            git("init", "-b", f"agent/{slug}", cwd=target)
-        git("config", "user.name", "sh41 Local Agent", cwd=target)
-        git("config", "user.email", "agent@localhost", cwd=target)
+            if initialize_non_git:
+                git("init", "-b", f"agent/{slug}", cwd=target)
+        if is_git or initialize_non_git:
+            git("config", "user.name", "sh41 Local Agent", cwd=target)
+            git("config", "user.email", "agent@localhost", cwd=target)
         target.rename(work)
     finally:
         shutil.rmtree(staging)

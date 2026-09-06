@@ -58,6 +58,7 @@ class Sandbox(StrictModel):
 class Source(StrictModel):
     provider: Literal["local"] = "local"
     path: str
+    mode: Literal["worktree", "direct", "copy"] = "copy"
 
 
 class MCP(StrictModel):

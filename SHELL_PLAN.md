@@ -2,6 +2,9 @@
 
 The shell is a detachable control panel, not the owner of agent processes.
 This project remains independent from the Shelter41 SaaS platform.
+The subsequent [coding-directory plan](CODING_DIRECTORY_PLAN.md) adds SQLite v3
+bindings, real Git worktrees, and explicit direct-folder access; the phase records
+below describe the original shell release.
 
 ```mermaid
 flowchart TB

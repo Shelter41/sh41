@@ -151,7 +151,8 @@ class ControlPlane:
                 request.pop("id", None)
                 if kind == "deploy-start":
                     spec = AgentSpec.model_validate(payload["spec"])
-                    self.service.deploy(spec, payload.get("secrets"))
+                    self.service.deploy(spec, payload.get("secrets"), shared_ack=payload.get("shared_ack", ()),
+                                        allow_shared=payload.get("allow_shared", False))
                     self.store.update_operation(ident, "running", "Starting native terminal")
                     request.update(agent=spec.agent, op="start")
                 else:

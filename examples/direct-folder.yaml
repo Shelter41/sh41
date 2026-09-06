@@ -1,0 +1,10 @@
+version: 1
+agent: folder-editor
+harness: codex
+workspace: development
+source:
+  provider: local
+  path: /absolute/path/to/non-git-folder
+  mode: direct
+inference:
+  provider: native

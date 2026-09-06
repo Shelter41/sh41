@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import csv
+import io
 import json
 import os
 import shutil
@@ -11,7 +13,8 @@ from pathlib import Path
 
 from .paths import private_dir
 from .credentials import native_profile
-from .workspace import prepare
+from .directories import materialize
+from .db import Store
 
 
 def docker_binary() -> str:
@@ -22,6 +25,12 @@ def docker_binary() -> str:
     if desktop.exists():
         return str(desktop)
     raise RuntimeError("Docker is missing; install Docker Desktop or Docker Engine")
+
+
+def bind_mount(source, destination):
+    output = io.StringIO()
+    csv.writer(output, lineterminator="").writerow(["type=bind", f"src={source}", f"dst={destination}"])
+    return output.getvalue()
 
 
 class DockerProvider:
@@ -81,8 +90,14 @@ class DockerProvider:
             network = state.get("network")
         image = self.ensure_image(spec.harness)
         base = private_dir(self.root / "agents" / deployment["agent_id"])
-        work = prepare(self.root, deployment["agent_id"], spec.agent,
-                       Path(spec.source.path) if spec.source else None)
+        binding = materialize(Store(self.root), deployment["agent_id"], spec.agent)
+        work = Path(binding["work"])
+        repository_mounts = []
+        if binding["mode"] == "worktree":
+            common = binding["common_dir"]
+            repository_mounts = ["--mount", bind_mount(common, common),
+                "-e", "GIT_AUTHOR_NAME=sh41 Local Agent", "-e", "GIT_AUTHOR_EMAIL=agent@localhost",
+                "-e", "GIT_COMMITTER_NAME=sh41 Local Agent", "-e", "GIT_COMMITTER_EMAIL=agent@localhost"]
         home = private_dir(base / "home")
         control = private_dir(base / "control")
         if spec.instructions:
@@ -98,9 +113,10 @@ class DockerProvider:
             "--cpus=2", "--memory=4g", "--init", "--restart=unless-stopped",
             "--add-host=host.docker.internal:host-gateway",
             *(["--network", network] if network else []),
-            "--mount", f"type=bind,src={work},dst=/workspace/agent",
-            "--mount", f"type=bind,src={home},dst=/state/home",
-            "--mount", f"type=bind,src={control},dst=/state/control",
+            "--mount", bind_mount(work, "/workspace/agent"),
+            "--mount", bind_mount(home, "/state/home"),
+            "--mount", bind_mount(control, "/state/control"),
+            *repository_mounts,
             image,
         ], timeout=60)
         self.wait_ready(deployment)
@@ -155,6 +171,8 @@ class DockerProvider:
             self.command(["stop", "--time", "10", self.name(deployment)])
 
     def start(self, deployment):
+        store = Store(self.root)
+        materialize(store, deployment["agent_id"], store.agent_slug(deployment["agent_id"]))
         if not self.inspect(deployment):
             raise RuntimeError("Container is missing; park and redeploy to recreate it")
         self.command(["start", self.name(deployment)])
