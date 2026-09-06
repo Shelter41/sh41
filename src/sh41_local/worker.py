@@ -341,8 +341,18 @@ class Manager:
                 atomic_json(self.control / "config.json", payload)
                 return {"configured": True}
             if operation == "status":
+                handle = self.runtime.lookup("agent")
                 return {"running": self.running or ("native" if self.busy() else None),
-                        "writer": self.writer(), "native_id": self.native_id()}
+                        "writer": self.writer(), "native_id": self.native_id(),
+                        "harness_state": "ready" if handle and self.runtime.inspect(handle).active
+                        else "stopped"}
+            if operation == "start":
+                handle = self.runtime.lookup("agent")
+                if self.busy() or self.writer():
+                    return {"started": bool(handle), "native_id": self.native_id()}
+                self.ensure_session(payload["session_id"], payload.get("native_id"))
+                self.save_state()
+                return {"started": True, "native_id": self.native_id()}
             if operation == "run":
                 if self.busy() or self.writer():
                     raise ValueError("Agent already has an active run or writable attachment")

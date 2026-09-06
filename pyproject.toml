@@ -9,16 +9,19 @@ description = "Persistent local coding agents with your choice of harness and mo
 requires-python = ">=3.12"
 license = "Apache-2.0"
 readme = "README.md"
-dependencies = ["click>=8.1,<9", "pydantic>=2.10,<3", "PyYAML>=6,<7", "httpx>=0.27,<1", "tomli-w>=1,<2"]
+dependencies = ["click>=8.1,<9", "pydantic>=2.10,<3", "PyYAML>=6,<7", "httpx>=0.27,<1", "tomli-w>=1,<2", "textual>=8.2,<9"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "ruff>=0.12,<1", "build>=1,<2"]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "ruff>=0.12,<1", "build>=1,<2"]
 
 [project.scripts]
 sh41 = "sh41_local.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sh41_local"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/examples", "/*.md", "/LICENSE", "/pyproject.toml", "/.github", "/.gitignore"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -117,6 +117,14 @@ class AgentService:
             return self.deploy(AgentSpec.model_validate(request["spec"]), request.get("secrets"))
         if operation == "spec":
             return parse_yaml(self.store.deployment(request["agent"], latest=True)["spec"]).model_dump()
+        if operation == "start":
+            slug = request["agent"]
+            deployment = self.ready(slug, request.get("secrets"))
+            session = self.store.session(slug)
+            result = self.provider.rpc(deployment, {"op": "start", "session_id": session["id"],
+                "native_id": session["native_id"]}, timeout=180)
+            self.store.native_session(session["id"], result.get("native_id"))
+            return result
         if operation == "agents":
             # Listing cached metadata remains useful while Docker is unavailable.
             try:

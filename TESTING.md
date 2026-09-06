@@ -65,7 +65,9 @@ invalid key. It needs network access but no valid credentials or paid inference.
 
 ## Manual Release Gates
 
-These checks are not replaced by mocked process tests:
+The macOS MVP requires the existing Docker/native/local-model and wheel checks,
+plus the shell acceptance below. The following broader certification checks are
+optional and must not be claimed as passed when unrun:
 
 1. Run the Docker and actual Ollama suites on a native Linux host and macOS.
 2. Warm an OpenCode agent's image, provider packages and model. Block outbound
@@ -83,3 +85,24 @@ These checks are not replaced by mocked process tests:
 
 Record actual outcomes in PLAN.md. Do not report CI configuration as a CI pass,
 container restart as a machine reboot, or fixture completions as model quality.
+
+## Shell Acceptance
+
+```sh
+.venv/bin/pytest -q tests/test_control.py tests/test_tui.py
+SH41_TEST_DOCKER=1 .venv/bin/pytest -q tests/test_shell_live.py
+```
+
+Headless Textual tests cover 80x24 and 120x40 layouts, 100 agents, filtering and
+selection preservation, disconnected polling, prompt shutdown, wizard navigation,
+both MCP forms, filename collisions, Save Only and Save and Start. Set
+`SH41_TEST_SCREENSHOTS` to an existing private directory to retain rendered SVG
+screenshots and fixture-only PTY output (never enable output capture for real
+credentialed harness tests). `NO_COLOR` is respected by the UI.
+
+The real shell test starts two detached OpenCode terminals without a model prompt,
+attaches and detaches through Textual, resizes the terminal, closes and kills shell
+processes, verifies a running turn finishes, reopens the dashboard and checks
+identities and native processes remain. Native account tests additionally verify
+explicit idempotent Start for Claude/Codex without writer acquisition or a run.
+These tests never reboot the Mac, restart Docker Desktop or touch SaaS services.

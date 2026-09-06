@@ -6,6 +6,30 @@ The supervisor holds per-agent operation locks and owns SQLite metadata. Databas
 constraints enforce one active deployment, conversation and submitted run per
 identity. No HTTP API, SaaS authentication, Redis or external database is needed.
 
+Interactive `sh41` and `sh41 shell` run a Textual client of that same supervisor.
+The wizard and CLI flags share manifest construction, validation and exclusive
+YAML writes. Native terminal attachment suspends Textual and hands the terminal
+to Docker exec/tmux; detaching restores the dashboard. The UI owns no agent
+processes. A new worker Start RPC creates/reuses detached native execution without
+submitting a turn or reserving a writer. Existing CLI deployment remains lazy.
+
+The control plane accepts immutable-ID background jobs and serializes mutations
+per agent, with SQLite v2 operation records and one active job per resource. Only
+kind, resource, timestamps, status and redacted progress are persisted, never job
+payloads or credentials. Accepted jobs run in supervisor threads after the client
+disconnects. Supervisor startup marks unfinished jobs interrupted and retains the
+existing incomplete-provisioning cleanup; it never blindly replays work.
+
+Dashboard observations are independent from lifecycle reconciliation: bounded
+Docker/worker/Ollama probes populate a timestamped memory cache using four probe
+workers. UI polls do not overlap; unavailable probes produce unknown/stale states
+without changing SQLite lifecycle records. Each agent shows recorded and observed
+state separately. Ollama GET version/tags/ps probes discover the selected service
+without starting it, adopting ownership or pulling a model. Downloaded weights,
+loaded memory and configured agent model references are distinct concepts.
+
+The architecture diagram and phase acceptance checklist are in SHELL_PLAN.md.
+
 DockerProvider builds pinned harness images and creates one restricted container
 per deployment. Each identity has three private host directories mounted into its
 container: workspace, native home and manager control/journals. Host source paths

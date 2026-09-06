@@ -42,7 +42,15 @@ CREATE TABLE IF NOT EXISTS events (
  id INTEGER PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id),
  sequence INTEGER NOT NULL, payload TEXT NOT NULL, UNIQUE(run_id,sequence)
 );
-PRAGMA user_version=1;
+CREATE TABLE IF NOT EXISTS operations (
+ id TEXT PRIMARY KEY, kind TEXT NOT NULL, resource TEXT NOT NULL,
+ status TEXT NOT NULL, progress TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_operation ON operations(resource)
+ WHERE status IN ('pending','running');
+PRAGMA user_version=2;
 """
 
 
@@ -55,7 +63,7 @@ class Store:
         with self.connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if version > 1:
+            if version > 2:
                 raise ValueError("Database was written by a newer sh41 version")
             conn.executescript("BEGIN IMMEDIATE;" + SCHEMA + "COMMIT;")
         self.path.chmod(0o600)
@@ -79,6 +87,37 @@ class Store:
                 FROM agents a LEFT JOIN deployments d ON d.agent_id=a.id AND d.ended_at IS NULL
                 ORDER BY a.slug
             """)]
+
+    def operations(self, limit=50) -> list[dict]:
+        with self.connect() as conn:
+            return [dict(row) for row in conn.execute(
+                "SELECT * FROM operations ORDER BY rowid DESC LIMIT ?", (limit,))]
+
+    def operation(self, ident):
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM operations WHERE id=?", (ident,)).fetchone()
+            return dict(row) if row else None
+
+    def add_operation(self, ident, kind, resource):
+        try:
+            with self.connect() as conn:
+                conn.execute("INSERT INTO operations(id,kind,resource,status) VALUES (?,?,?,'pending')",
+                             (ident, kind, resource))
+        except sqlite3.IntegrityError:
+            raise ValueError("An operation is already active for this resource") from None
+
+    def update_operation(self, ident, status, progress=""):
+        with self.connect() as conn:
+            conn.execute("""UPDATE operations SET status=?,progress=?,
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?""",
+                (status, progress, ident))
+
+    def interrupt_operations(self):
+        with self.connect() as conn:
+            conn.execute("""UPDATE operations SET status='interrupted',
+                progress='Supervisor restarted; inspect state before retrying',
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                WHERE status IN ('pending','running')""")
 
     def agent(self, slug: str) -> dict:
         with self.connect() as conn:

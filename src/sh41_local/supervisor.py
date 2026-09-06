@@ -59,11 +59,11 @@ def ensure(root: Path) -> None:
         raise RuntimeError("Local supervisor failed to start; inspect supervisor.log")
 
 
-def request(payload: dict, *, root: Path | None = None):
+def request(payload: dict, *, root: Path | None = None, timeout=None):
     root = root or state_home()
     ensure(root)
     with connect(root) as sock:
-        sock.settimeout(None)
+        sock.settimeout(timeout)
         sock.sendall(json.dumps(payload).encode() + b"\n")
         with sock.makefile("r") as stream:
             line = stream.readline()
@@ -78,8 +78,9 @@ def request(payload: dict, *, root: Path | None = None):
 class Server(socketserver.ThreadingUnixStreamServer):
     daemon_threads = True
 
-    def __init__(self, root: Path, dispatch):
+    def __init__(self, root: Path, dispatch, *, serialize=True):
         self.dispatch = dispatch
+        self.serialize = serialize
         self.agent_locks: dict[str, threading.Lock] = {}
         self.lock_guard = threading.Lock()
         super().__init__(socket_path(root), Handler)
@@ -102,13 +103,14 @@ class Handler(socketserver.StreamRequestHandler):
                 raise ValueError("Expected a request object")
             key = payload.get("agent") or (payload.get("spec") or {}).get("agent") or "_global"
             # Reject concurrent writes instead of invisibly enqueueing another turn.
-            lock = self.server.agent_lock(key)
-            if not lock.acquire(blocking=False):
+            lock = self.server.agent_lock(key) if self.server.serialize else None
+            if lock is not None and not lock.acquire(blocking=False):
                 raise ValueError("Agent is busy; wait for its current operation")
             try:
                 result = self.server.dispatch(payload)
             finally:
-                lock.release()
+                if lock is not None:
+                    lock.release()
             response = {"result": result}
         except (ValueError, RuntimeError) as exc:
             response = {"error": str(exc)}
@@ -121,6 +123,7 @@ class Handler(socketserver.StreamRequestHandler):
 
 
 def serve():
+    from .control import ControlPlane
     from .service import AgentService
 
     os.umask(0o077)
@@ -138,7 +141,9 @@ def serve():
         except RuntimeError:
             # Metadata remains accessible while Docker is unavailable.
             pass
-        with Server(root, service.dispatch) as server:
+        control = ControlPlane(service)
+        service.store.interrupt_operations()
+        with Server(root, control.dispatch, serialize=False) as server:
             path.chmod(0o600)
             server.serve_forever()
 

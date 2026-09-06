@@ -141,8 +141,8 @@ class DockerProvider:
             raise RuntimeError("Inference network ownership mismatch")
         return name, data["IPAM"]["Config"][0]["Gateway"]
 
-    def inspect(self, deployment: dict):
-        result = self.command(["inspect", self.name(deployment)], check=False)
+    def inspect(self, deployment: dict, *, timeout=60):
+        result = self.command(["inspect", self.name(deployment)], check=False, timeout=timeout)
         if result.returncode:
             return None
         item = json.loads(result.stdout)[0]

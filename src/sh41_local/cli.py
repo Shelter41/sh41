@@ -12,10 +12,25 @@ from .spec import AgentSpec, parse_yaml
 from .supervisor import request
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(__version__, prog_name="sh41 local")
-def main() -> None:
+@click.pass_context
+def main(ctx) -> None:
     """Run persistent coding agents locally."""
+    if ctx.invoked_subcommand is None:
+        if os.isatty(0) and os.isatty(1):
+            open_shell.callback()
+        else:
+            click.echo(ctx.get_help())
+
+
+@main.command("shell")
+def open_shell():
+    """Open the local agent control panel."""
+    if not os.isatty(0) or not os.isatty(1):
+        raise click.ClickException("shell requires an interactive terminal")
+    from .tui.app import Shell
+    Shell().run()
 
 
 def call(payload):
@@ -78,29 +93,16 @@ def launch(name, harness, workspace, source, model, ollama, base_url, api_key_en
     if ollama and base_url:
         raise click.UsageError("--ollama and --base-url are mutually exclusive")
     name = name or f"{harness}-{secrets.token_hex(2)}"
-    payload = {"agent": name, "harness": harness, "workspace": workspace,
-               "inference": {"provider": "ollama" if ollama else
-                             "openai-compatible" if base_url else "native"}}
-    if model:
-        payload["model"] = model
-    if base_url:
-        payload["inference"]["base_url"] = base_url
-    if api_key_env:
-        payload["inference"]["api_key"] = {"env": api_key_env}
-    if source:
-        payload["source"] = {"provider": "local", "path": str(source.resolve())}
-    if instructions:
-        payload["instructions"] = str(instructions.resolve())
+    from .manifests import build_spec, write_manifest
     try:
         if len({name for name, _ in servers}) != len(servers):
             raise ValueError("MCP names must be unique")
-        payload["mcp"] = {name: json.loads(raw) for name, raw in servers}
-        # Same validation and error sanitization as authored YAML.
-        import yaml
-        spec = parse_yaml(yaml.safe_dump(payload))
+        spec = build_spec(name=name, harness=harness, workspace=workspace, source=source,
+            model=model, provider="ollama" if ollama else "openai-compatible" if base_url else "native",
+            base_url=base_url, api_key_env=api_key_env, instructions=instructions,
+            mcp={name: json.loads(raw) for name, raw in servers})
         destination = output or Path(f"{spec.agent}.yaml")
-        with destination.open("x") as stream:
-            stream.write(spec.as_yaml())
+        write_manifest(spec, destination)
     except FileExistsError:
         raise click.ClickException("Manifest already exists; use deploy or another --output") from None
     except (ValueError, OSError) as exc:
@@ -140,12 +142,12 @@ def lifecycle_command(name):
     def command(agent):
         """Change an agent's execution lifecycle, retaining its files."""
         payload = {"op": name, "agent": agent}
-        if name == "redeploy":
+        if name in {"redeploy", "start"}:
             payload["secrets"] = agent_secrets(agent)
         emit(call(payload))
 
 
-for _name in ("pause", "resume", "park", "redeploy"):
+for _name in ("start", "pause", "resume", "park", "redeploy"):
     lifecycle_command(_name)
 
 
@@ -339,5 +341,38 @@ def stop_models():
     """Stop only sh41-owned Ollama, retaining downloaded models."""
     try:
         emit(ollama_service().stop())
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise click.ClickException(str(exc)) from None
+
+
+@models.command("start")
+def start_models():
+    """Start or reuse the local Ollama server without pulling a model."""
+    try:
+        state = ollama_service().ensure()
+        emit({"url": state["url"], "owned": state.get("owned", False)})
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise click.ClickException(str(exc)) from None
+
+
+@models.command("status")
+@click.option("--json", "as_json", is_flag=True)
+def models_status(as_json):
+    """Observe Ollama without starting it."""
+    try:
+        emit(ollama_service().status(), as_json)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise click.ClickException(str(exc)) from None
+
+
+@models.command("ps")
+@click.option("--json", "as_json", is_flag=True)
+def running_models(as_json):
+    """List loaded models, separately from downloaded weights."""
+    try:
+        state = ollama_service().status()
+        if state["loaded"] is None:
+            raise ValueError("Loaded models unavailable; check sh41 models status")
+        emit(state["loaded"], True)
     except (ValueError, RuntimeError, OSError) as exc:
         raise click.ClickException(str(exc)) from None

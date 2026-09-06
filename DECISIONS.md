@@ -14,3 +14,9 @@
 - Do not replay uncertain or interrupted turns because tool actions may already have happened.
 - An empty native completion marker is insufficient proof of success because Codex can emit it after an authentication failure.
 - Keep network egress unrestricted for the MVP and document Docker's limits rather than advertising hostile-code or air-gap security.
+- Use Textual on the existing Python supervisor boundary so the shell is another client, not a second orchestration implementation.
+- Keep native terminals in per-agent Docker tmux sessions so closing or killing the dashboard cannot terminate agent compute.
+- Persist background operation outcomes in SQLite while keeping secret-bearing request payloads only in memory.
+- Treat unreachable runtime observations as unknown rather than overwriting durable lifecycle state from a failed probe.
+- Keep Ollama monitoring passive and distinguish downloaded models from loaded models because disk availability does not imply memory residency.
+- Support and validate macOS first; Linux host certification, actual reboot and additional provider-account evidence are deferred checks, not local-shell MVP blockers.

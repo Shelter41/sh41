@@ -7,13 +7,13 @@ workspace and conversations across container recreation. No Shelter41 account,
 SaaS backend, Postgres, Redis, or API server is required.
 
 **Status: pre-release MVP.** Implemented, with unit and real Docker/harness tests.
-See [PLAN.md](PLAN.md) for verified checks and outstanding release gates. This is
+See [PLAN.md](PLAN.md) and [SHELL_PLAN.md](SHELL_PLAN.md) for implementation and acceptance records. This is
 an independent project, not a local mode of the cloud CLI.
 
 ## Install
 
-Requires Python 3.12+, Git, and running Docker Desktop on macOS or Docker Engine
-on Linux. Local inference additionally needs [Ollama](https://ollama.com/download)
+Requires Python 3.12+, Git, and running Docker Desktop on macOS. Linux/Docker
+Engine support is experimental and has not been host-validated. Local inference additionally needs [Ollama](https://ollama.com/download)
 and enough memory for the chosen model. No host tmux installation is needed.
 
 From this checkout:
@@ -30,6 +30,47 @@ The distribution is named `sh41-local`; it is not published to PyPI yet. The fir
 deployment builds a pinned harness image and requires internet access.
 
 ## Quickstart
+
+Open the local control panel:
+
+```sh
+sh41
+# Explicit equivalent:
+sh41 shell
+```
+
+The **Agents** view lists lifecycle, live activity, harness, model and workspace.
+Select an agent and attach to its native terminal, or use the action menu for
+Start, pause/resume, park/redeploy, conversations, run history and export. New
+opens a guided wizard; Import YAML deploys an existing manifest after confirmation.
+The wizard writes the same schema as CLI flags, with Save Only or Save and Start.
+It never overwrites a file, and saved YAML remains available if deployment fails.
+
+Each started agent has its own detached tmux session **inside its Docker sandbox**.
+Detach with **Ctrl-b, then d** to return to the dashboard; **Ctrl-q** closes the
+dashboard without stopping agents or accepted background operations. Native
+terminals remain the conversation interface, not an embedded shell chat renderer.
+Start is idempotent and does not send a prompt. Shell Resume/Redeploy and
+conversation changes also start the selected native terminal; the existing CLI
+commands retain their original lifecycle behavior, with `sh41 start NAME` added.
+
+The **Models** view distinguishes downloaded weights from loaded models, reports
+Ollama ownership and reachability, and offers Start/Reuse, Pull and guarded Stop.
+Model rows list agent configuration references, not exclusive GPU ownership.
+Simply opening the shell never starts Ollama or downloads weights. The
+**Operations** view retains background progress and failures across shell exits;
+interrupted supervisor operations are not automatically retried.
+
+Both shell entrypoints require an interactive terminal. Bare `sh41` in a pipe
+prints help; all existing commands remain scriptable. Secret references use the
+shell process's environment; native account import is always explicit. A `*` on
+an agent state means the observation is stale. Unknown is not proof of stopped
+compute; the detail pane separately shows the recorded lifecycle and timestamp.
+Use an 80-column, 24-line terminal or larger. Long tables scroll horizontally.
+The supervisor inherits `OLLAMA_HOST` when first started; set it before your first
+command for a custom server. Existing model-server ownership guards still apply.
+
+### Command-line workflow
 
 Already use Codex? Explicitly import its native login, then launch:
 
@@ -64,6 +105,8 @@ sh41 launch local-reviewer --harness opencode --source /path/to/project \
   --ollama --model qwen3:4b-instruct
 sh41 run local-reviewer --message "Review the code and run its tests"
 sh41 models ls
+sh41 models status --json
+sh41 models ps --json
 ```
 
 The model name is explicit, not a promise of coding quality. A model advertising
@@ -91,6 +134,9 @@ starting its own. On Linux an existing service must bind a Docker-reachable
 interface; a managed service binds only the dedicated Docker bridge gateway.
 sh41 never stops an externally managed server. Pause or park its agents before
 `sh41 models stop`; downloaded models remain.
+`sh41 models start` starts or reuses the server without downloading a model.
+`models ps` reports loaded models, not active generation requests. Status probes
+never start a server and report unavailable inventory distinctly from an empty list.
 
 ## YAML And Flags
 

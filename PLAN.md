@@ -4,10 +4,16 @@
 
 Independent project at `/Users/spider/Projects/sh41-local`, distribution
 `sh41-local`, executable `sh41`, Apache-2.0. Python 3.12+, Click, Pydantic, PyYAML,
-SQLite. macOS/Docker Desktop and Linux/Docker Engine. One container per agent,
+SQLite. macOS/Docker Desktop first; Linux/Docker Engine is experimental. One container per agent,
 tmux attachment, private source copies, persistent identity and native sessions.
 OpenCode, Claude Code, Codex; API keys and native account import. External
 compatible inference and host Ollama service lifecycle. Stdio and HTTP MCP.
+
+Scope clarification: the earlier Linux/reboot/provider certification gates below
+were broader than the macOS MVP and are retained as historical validation notes,
+not current blockers. Successful valid API-key and third-party remote endpoint
+acceptance remain explicitly unverified; native accounts and actual host Ollama
+are the verified end-to-end paths. See SHELL_PLAN.md for the subsequent TUI MVP.
 
 No SaaS edits or runtime dependencies, cloud deployment, web UI, shared semantic
 memory, schedules, custom images, additional sandbox providers, or multi-agent
@@ -60,7 +66,7 @@ but explicitly extend manifests for local sources, inference, and MCP.
   for Claude/Codex; real OpenCode protocol, all three harnesses' stdio/HTTP MCP,
   PTY attach/detach/input ownership/interrupt and container-restart recovery pass
   on macOS. Direct-TUI-only conversation recovery also passes for Claude/Codex.
-  Real API-key account acceptance remains a release check; key translation,
+  Real API-key account acceptance remains an optional external validation check; key translation,
   redaction and error paths have unit coverage.
 
 ## Phase 5: External Inference And Ollama
@@ -76,15 +82,15 @@ but explicitly extend manifests for local sources, inference, and MCP.
   serialized pulls, reuse and failure paths have unit coverage. Actual local
   edit/test acceptance passes with qwen3:4b-instruct, including a second task on
   a network-isolated agent with only a local model relay. Linux host validation
-  and a third-party remote open-weight endpoint remain outstanding.
+  and a third-party remote open-weight endpoint are deferred, unverified paths.
 
 ## Phase 6: Release Gate
 
 - Finish accurate README, tested examples, troubleshooting and CI.
-- Gate: full suite/Ruff/wheel install; real harness acceptance; macOS and Linux
-  Docker/Ollama tests; actual reboot recovery; SaaS-blocked and offline local
+- Gate: full suite/Ruff/wheel install; real harness acceptance; macOS
+  Docker/Ollama tests; container recreation recovery; SaaS-blocked and offline local
   inference after downloads. Record unrun checks; never equate mocks to live proof.
-- Status: in progress. README, examples, architecture/decisions, testing guide
+- Status: macOS CLI MVP verified. README, examples, architecture/decisions, testing guide
   and macOS/Linux CI configuration added. Wheel install plus actual CLI deployment
   and a turn outside the checkout pass. CI has not run remotely. Actual Linux
   host, machine reboot and live API-key authentication are not yet verified.
@@ -127,7 +133,8 @@ installation, generated YAML, real CLI deploy/run/history/park and supervisor
 cleanup outside the checkout pass. Native Linux and actual reboot need a
 disposable Linux machine/VM; live API-key checks need keys not available in the
 current shell. No user machine reboot or host firewall change was attempted.
-These outstanding gates prevent declaring the release fully validated.
+These checks were previously treated as blockers; the macOS-first clarification
+above defers them without claiming they passed.
 
 Combined acceptance on 2026-09-06: 51 passed and one intentionally skipped wheel
 test; the wheel end-to-end test passed separately. Two subsequent regression tests
@@ -164,6 +171,6 @@ session and direct-terminal recovery plus invalid-key rejection); three cases
 requiring valid API keys or a remote model remained skipped. The standard suite
 passed 48 tests, with its separate wheel gate skipped and live cases deselected.
 Ruff, source/wheel builds and the separately run installed-wheel gate passed.
-Release completion remains blocked on a
-disposable Linux test environment, successful real API-key/provider validation,
-and provider-side expiry evidence; those prerequisites are not configured here.
+This historical audit left Linux, successful real API-key/provider validation and
+provider-side expiry evidence unverified. They are deferred certification checks,
+not prerequisites for the macOS-first shell MVP.

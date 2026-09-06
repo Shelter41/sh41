@@ -45,6 +45,11 @@ def test_local_model_edits_and_tests_private_copy(tmp_path, monkeypatch):
                    for part in (event.get("message", {}).get("parts", [])
                                 if isinstance(event.get("message"), dict) else []))
         before = Ollama(service.root, service.provider).saved()
+        observation = Ollama(service.root, service.provider).status()
+        assert observation["state"] == "ready"
+        assert any(row["name"] == spec.model for row in observation["models"])
+        assert any(row["name"] == spec.model for row in observation["loaded"])
+        assert Ollama(service.root, service.provider).saved() == before
         service.lifecycle(spec.agent, "pause")
         service.lifecycle(spec.agent, "resume")
         assert Ollama(service.root, service.provider).saved() == before

@@ -161,6 +161,46 @@ class Ollama:
             response.raise_for_status()
             return response.json().get("models", [])
 
+    def status(self):
+        """Observe the selected server without starting it or changing ownership."""
+        state = self.saved()
+        external = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+        if not external.startswith(("http://", "https://")):
+            external = "http://" + external
+        parts = urlsplit(external)
+        if (not parts.hostname or parts.scheme not in {"http", "https"} or parts.username
+                or parts.password or parts.query or parts.fragment or parts.path not in {"", "/"}):
+            raise ValueError("OLLAMA_HOST must be an HTTP(S) origin without credentials or a path")
+        url = (external if "OLLAMA_HOST" in os.environ else state.get("url", external)).rstrip("/")
+        if ("OLLAMA_HOST" not in os.environ and url != external.rstrip("/")
+                and not self.healthy(url) and self.healthy(external)):
+            url = external.rstrip("/")
+        owned = bool(state.get("owned") and state.get("url") == url
+                     and signature(state["pid"]) == state["signature"])
+        result = {"state": "unreachable", "url": url, "owned": owned, "version": None,
+                  "models": None, "loaded": None, "errors": []}
+        with self.client(url, timeout=2) as client:
+            try:
+                response = client.get("/api/version")
+                response.raise_for_status()
+                result["version"] = response.json()["version"]
+                result["state"] = "ready"
+            except (httpx.HTTPError, ValueError, KeyError):
+                return result
+            for field, path in (("models", "/api/tags"), ("loaded", "/api/ps")):
+                try:
+                    response = client.get(path)
+                    response.raise_for_status()
+                    rows = response.json()["models"]
+                    if not isinstance(rows, list):
+                        raise ValueError("Invalid model list")
+                    result[field] = [{k: v for k, v in row.items() if k in {
+                        "name", "model", "size", "size_vram", "expires_at", "modified_at",
+                    }} for row in rows if isinstance(row, dict)]
+                except (httpx.HTTPError, ValueError, KeyError):
+                    result["errors"].append(field + " unavailable")
+        return result
+
     def container_url(self, state):
         parts = urlsplit(state["url"])
         host = parts.hostname

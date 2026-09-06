@@ -12,6 +12,7 @@ import pytest
 
 from sh41_local.service import AgentService
 from test_opencode import CompletionHandler
+from test_shell_live import shell_terminal, until
 
 
 @pytest.mark.docker
@@ -24,7 +25,7 @@ def test_installed_wheel_cli_and_supervisor():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         with tempfile.TemporaryDirectory(prefix="s41-wheel-", dir="/tmp") as directory:
-            root = Path(directory) / "state"
+            root = (Path(directory) / "state").resolve()
             env = dict(os.environ, SH41_LOCAL_HOME=str(root))
             env.pop("PYTHONPATH", None)
             service = AgentService(root)
@@ -47,6 +48,12 @@ def test_installed_wheel_cli_and_supervisor():
                 invoke("launch", "wheel", "--harness", "opencode", "--model", "fixture-model",
                        "--base-url", f"http://{host}:{server.server_port}/v1")
                 assert (Path(directory) / "wheel.yaml").exists()
+                invoke("start", "wheel")
+                invoke("shell", "--help")
+                with shell_terminal(env, directory, cli=cli) as (child, master, output):
+                    until(lambda: b"wheel" in output and b"Agents" in output)
+                    os.write(master, b"\x11")
+                    assert child.wait(timeout=15) == 0
                 assert json.loads(invoke("agents", "--json"))[0]["slug"] == "wheel"
                 assert "SH41_FIXTURE_OK" in invoke("run", "wheel", "--message", "Hello from the wheel")
                 assert json.loads(invoke("history", "wheel", "--json"))[0]["status"] == "completed"

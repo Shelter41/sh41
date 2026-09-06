@@ -37,6 +37,11 @@ def test_native_account_and_session_recovery(tmp_path, harness):
         import_native(root, harness)
         spec = AgentSpec(agent="acceptance", harness=harness)
         deployments.append(service.deploy(spec))
+        for _ in range(2):
+            assert service.dispatch({"op": "start", "agent": spec.agent})["started"]
+        state = service.provider.rpc(deployments[0], {"op": "status"})
+        assert state["harness_state"] == "ready" and not state["writer"] and not state["running"]
+        assert not service.store.history(spec.agent)
         marker = "release_" + uuid.uuid4().hex[:8]
         finish(service, "acceptance", f"Our project's release codename is {marker}. Please acknowledge this project detail briefly. No tools are needed.")
         session = service.store.session("acceptance")
