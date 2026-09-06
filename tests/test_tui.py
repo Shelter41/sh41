@@ -305,6 +305,57 @@ async def test_model_inventory_refreshes_open_wizard():
         assert wizard.models == ["local:4b"]
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dimensions", [(80, 24), (120, 40)])
+async def test_ollama_unavailable_empty_and_download_actions(dimensions, monkeypatch):
+    client = FakeClient(0)
+    opened = []
+    monkeypatch.setattr("sh41_local.tui.wizard.webbrowser.open", lambda url, **kwargs: opened.append(url) or True)
+    app = Shell(client)
+    async with app.run_test(size=dimensions) as pilot:
+        await settled(pilot, app)
+        app.action_new()
+        await pilot.pause()
+        wizard = app.screen
+        await click(pilot, "#next")
+        wizard.update_model_snapshot({"state": "unreachable", "url": "http://localhost:11434", "models": None})
+        assert "unavailable" in str(wizard.query_one("#ollama-status", Static).content)
+        assert not client.submissions
+        assert not opened
+        wizard.query_one("#wizard-ollama-library").scroll_visible()
+        await click(pilot, "#wizard-ollama-library")
+        assert opened == ["https://ollama.com/search?c=tools"]
+        import os
+        if os.environ.get("SH41_TEST_SCREENSHOTS"):
+            app.save_screenshot(f"ollama-unavailable-{dimensions[0]}x{dimensions[1]}.svg",
+                                path=os.environ["SH41_TEST_SCREENSHOTS"])
+        assert not wizard.query_one("#wizard-ollama-start", Button).disabled
+        wizard.query_one("#wizard-ollama-start").scroll_visible()
+        await click(pilot, "#wizard-ollama-start")
+        assert client.submissions[-1][0] == "models-start"
+        wizard.update_model_snapshot({"state": "ready", "url": "http://localhost:11434", "models": []})
+        assert "No downloaded models" in str(wizard.query_one("#ollama-status", Static).content)
+        if os.environ.get("SH41_TEST_SCREENSHOTS"):
+            app.save_screenshot(f"ollama-empty-{dimensions[0]}x{dimensions[1]}.svg",
+                                path=os.environ["SH41_TEST_SCREENSHOTS"])
+        assert wizard.query_one("#wizard-ollama-start", Button).disabled
+        wizard.query_one("#wizard-ollama-pull").scroll_visible()
+        await click(pilot, "#wizard-ollama-pull")
+        app.screen.query_one("#answer", Input).value = "fixture:4b"
+        await click(pilot, "#accept")
+        assert client.submissions[-1] == ("models-pull", {"ident": client.submissions[-1][1]["ident"], "model": "fixture:4b"})
+        assert wizard.value("model") == "fixture:4b"
+        wizard.update_model_snapshot({"state": "ready", "models": [{"name": "fixture:4b"}]})
+        assert wizard.models == ["fixture:4b"]
+        wizard.update_model_snapshot({"state": "ready", "models": None})
+        assert "inventory unavailable" in str(wizard.query_one("#ollama-status", Static).content)
+        assert wizard.value("model") == "fixture:4b"
+        wizard.query_one("#provider", Select).value = "openai-compatible"
+        await pilot.pause()
+        assert not wizard.query_one("#ollama-controls").display
+        assert not wizard.query_one("#ollama-status").display
+
+
 async def directory_settled(pilot, wizard):
     for _ in range(50):
         await pilot.pause(0.05)

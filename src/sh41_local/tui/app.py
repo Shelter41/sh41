@@ -171,16 +171,18 @@ class Shell(App):
             else:
                 self.models = result
                 self.render_models()
-                names = [row.get("name", row.get("model")) for row in result.get("models") or []]
                 for screen in self.screen_stack:
                     if isinstance(screen, Wizard):
-                        screen.update_models(names)
+                        screen.update_model_snapshot(result)
             self.render_health()
         except (ValueError, RuntimeError, OSError):
             if key == "agents":
                 self.q("#health", Static).update("Supervisor disconnected | Displayed data is stale")
             else:
                 self.q("#model-server", Static).update("Ollama status unavailable | Displayed data is stale")
+                for screen in self.screen_stack:
+                    if isinstance(screen, Wizard):
+                        screen.update_model_snapshot(dict(self.models, stale=True))
         finally:
             self.polling.discard(key)
 
@@ -294,7 +296,7 @@ class Shell(App):
     def action_new(self):
         if self.screen is self.home:
             names = [row.get("name", row.get("model")) for row in self.models.get("models") or []]
-            self.push_screen(Wizard(models=names), self.wizard_done)
+            self.push_screen(Wizard(models=names, model_state=self.models), self.wizard_done)
 
     def wizard_done(self, result):
         if result:

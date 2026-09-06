@@ -27,3 +27,4 @@
 - Share Git metadata explicitly for real worktrees rather than claiming repository-level isolation, retaining Docker isolation for other host paths and private agent state.
 - Persist immutable directory bindings and fail ambiguous recovery without resetting files, so container recreation cannot silently replace an agent's work.
 - Provide unrestricted host directory navigation separately from source validation, because an inline completion is not a filesystem browser and browsing private-state ancestors must not grant an agent access to them.
+- Distinguish unavailable Ollama inventories from zero downloads and expose explicit start/pull actions in the wizard, without treating model selection as consent to background downloads.

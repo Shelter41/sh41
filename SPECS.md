@@ -40,6 +40,11 @@ filesystem browsing with root/home/parent navigation and asynchronous path check
 browsing does not reserve or materialize an agent directory. Its Ollama selector follows the existing
 passive model snapshots, preserving explicit/custom choices on refresh; no model
 is started or downloaded by choosing it. Remote/native models remain free text.
+Wizard model snapshots retain server health and address rather than reducing
+unavailable inventories to an unexplained empty list. Explicit start/pull actions
+use the existing supervisor jobs. CLI model listing uses the same passive discovery
+and reports unreachable servers as errors, including externally managed endpoints
+that have no saved ownership record.
 
 Directory inspection is a read-only supervisor operation backed by Git discovery
 and the local binding registry. The wizard debounces inspection, discards stale

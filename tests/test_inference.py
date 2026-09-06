@@ -87,3 +87,25 @@ def test_container_host_routing(tmp_path, monkeypatch):
         service.container_url({"url": "http://127.0.0.1:1234"})
     assert service.container_url({"url": "http://172.30.0.1:1234"}) == "http://172.30.0.1:1234/v1"
     assert service.container_url({"url": "https://models.example.com"}) == "https://models.example.com:443/v1"
+
+
+def test_model_list_discovers_external_server_without_saved_state(tmp_path, monkeypatch):
+    service = Ollama(tmp_path, None)
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+
+    def handle(request):
+        if request.url.path == "/api/version":
+            return httpx.Response(200, json={"version": "test"})
+        return httpx.Response(200, json={"models": [{"name": "local:4b"}]})
+
+    monkeypatch.setattr(service, "client", lambda url, timeout=10: httpx.Client(base_url=url, transport=httpx.MockTransport(handle)))
+    assert service.models() == [{"name": "local:4b"}]
+    assert not service.state_file.exists()
+
+
+@pytest.mark.parametrize("state,match", [("unreachable", "unreachable"), ("ready", "inventory")])
+def test_model_list_does_not_disguise_unavailable_inventory_as_empty(tmp_path, monkeypatch, state, match):
+    service = Ollama(tmp_path, None)
+    monkeypatch.setattr(service, "status", lambda: {"state": state, "url": "http://localhost:11434", "models": None})
+    with pytest.raises(ValueError, match=match):
+        service.models()

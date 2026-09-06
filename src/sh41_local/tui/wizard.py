@@ -1,5 +1,6 @@
 import json
 import secrets
+import webbrowser
 from pathlib import Path
 
 from textual import on, work
@@ -103,9 +104,10 @@ class Wizard(Dialog):
     Wizard #source-browse { min-width: 10; width: 10; }
     """
 
-    def __init__(self, models=(), spec=None):
+    def __init__(self, models=(), spec=None, model_state=None):
         super().__init__()
         self.models = sorted({model for model in models if isinstance(model, str) and model})
+        self.model_state = model_state or {}
         self.initial = spec
         self.mcp = {k: v.model_dump(exclude_none=True) for k, v in spec.mcp.items()} if spec else {}
         self.step = 0
@@ -144,6 +146,11 @@ class Wizard(Dialog):
                     yield Label("Downloaded Ollama model", id="installed-label")
                     yield Select(self.model_options(), value=spec.model if spec and spec.model in self.models else "",
                                  allow_blank=False, id="installed")
+                    yield Static("", id="ollama-status", markup=False)
+                    with Horizontal(id="ollama-controls"):
+                        yield Button("Start / Reuse", id="wizard-ollama-start")
+                        yield Button("Pull model", id="wizard-ollama-pull")
+                        yield Button("Model library", id="wizard-ollama-library")
                     yield Label("Model name (native default when blank)", id="model-label")
                     yield Input(spec.model or "" if spec else "", id="model")
                     yield Label("Compatible endpoint URL", id="endpoint-label")
@@ -285,6 +292,35 @@ class Wizard(Dialog):
         return [(m, m) for m in self.models] + [
             ("Custom model..." if self.models else "Custom model... (no models listed)", "")]
 
+    def update_model_snapshot(self, state):
+        self.model_state = state
+        self.update_models([r.get("name", r.get("model")) for r in state.get("models") or []])
+        self.update_model_fields()
+
+    @on(Button.Pressed, "#wizard-ollama-start")
+    def start_ollama(self):
+        self.app.submit_job("models-start")
+
+    @on(Button.Pressed, "#wizard-ollama-pull")
+    def pull_ollama(self):
+        self.app.push_screen(Prompt("Download Ollama model tag", initial=self.value("model")), self.download_model)
+
+    def download_model(self, model):
+        if model:
+            self.query_one("#installed", Select).value = ""
+            self.query_one("#model", Input).value = model
+            self.app.submit_job("models-pull", model=model)
+
+    @on(Button.Pressed, "#wizard-ollama-library")
+    @work(exit_on_error=False)
+    async def model_library(self):
+        try:
+            opened = await background(webbrowser.open, "https://ollama.com/search?c=tools", new=2)
+            if not opened:
+                self.app.notify("Could not open the browser: https://ollama.com/search?c=tools", severity="error")
+        except OSError:
+            self.app.notify("Could not open the browser: https://ollama.com/search?c=tools", severity="error")
+
     def update_models(self, models):
         names = sorted({model for model in models if isinstance(model, str) and model})
         if names == self.models:
@@ -299,8 +335,27 @@ class Wizard(Dialog):
 
     def update_model_fields(self):
         ollama = self.query_one("#provider", Select).value == "ollama"
-        for ident in ("#installed", "#installed-label"):
+        for ident in ("#installed", "#installed-label", "#ollama-status", "#ollama-controls"):
             self.query_one(ident).display = ollama
+        state = self.model_state
+        url = state.get("url", "configured server")
+        if state.get("state") == "ready":
+            if state.get("models") is None:
+                status = f"Ollama reachable at {url}; model inventory unavailable"
+            elif not state["models"]:
+                status = f"No downloaded models on {url}"
+            else:
+                status = f"{len(self.models)} downloaded models on {url}"
+        elif state.get("state") == "unreachable":
+            status = f"Ollama unavailable at {url}"
+        elif state.get("state") == "unknown":
+            status = "Ollama status unavailable"
+        else:
+            status = "Ollama: checking server and downloaded models"
+        if state.get("stale"):
+            status += " (stale)"
+        self.query_one("#ollama-status", Static).update(status)
+        self.query_one("#wizard-ollama-start", Button).disabled = state.get("state") == "ready" and not state.get("stale")
         custom = not ollama or not self.query_one("#installed", Select).value
         for ident in ("#model", "#model-label"):
             self.query_one(ident).display = custom

@@ -153,13 +153,12 @@ class Ollama:
             return state
 
     def models(self):
-        state = self.saved()
-        if not state.get("url") or not self.healthy(state["url"]):
-            return []
-        with self.client(state["url"]) as client:
-            response = client.get("/api/tags")
-            response.raise_for_status()
-            return response.json().get("models", [])
+        state = self.status()
+        if state["state"] != "ready":
+            raise ValueError(f"Ollama is unreachable at {state['url']}; start it with sh41 models start")
+        if state["models"] is None:
+            raise ValueError(f"Ollama model inventory is unavailable at {state['url']}")
+        return state["models"]
 
     def status(self):
         """Observe the selected server without starting it or changing ownership."""

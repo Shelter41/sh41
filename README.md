@@ -60,6 +60,12 @@ parent/child folders and paused/parked agents that can later resume.
 The Ollama model dropdown lists downloaded models and refreshes while the wizard
 is open. Choose Custom model to enter another tag. Compatible endpoints and native
 providers retain manual model entry; their remote catalogs are not queried.
+The wizard shows the selected Ollama address and distinguishes an unreachable
+server, an unavailable inventory, and a server with no downloads. Start / Reuse
+and Pull model are available there; opening the wizard never starts a server or
+downloads weights automatically. The dropdown is not the online Ollama catalog.
+Model library opens Ollama's tools catalog in your browser. Choose a local model
+tag there, then enter it in Pull model; cloud-only models are not supported.
 It never overwrites a file, and saved YAML remains available if deployment fails.
 
 Each started agent has its own detached tmux session **inside its Docker sandbox**.
