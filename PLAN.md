@@ -142,3 +142,28 @@ test skipped; 8 live tests deselected), Ruff passed, and wheel/sdist builds pass
 The installed-wheel end-to-end test then passed separately on the rebuilt Python.
 The model server was stopped and only its cached weights retained; all test-owned
 agent containers were removed. Unrelated Docker services were left running.
+
+Continuation audit: the checkout remained clean and the missing prerequisites
+were rechecked: the host is macOS; no API keys or remote test endpoint/model are
+configured. Added three opt-in external acceptance cases for Claude/Codex API-key
+authentication, invalid-key rejection/recovery, and a real remote-compatible
+edit/test task. These cases are implemented but not claimed as passed. Linux,
+actual reboot, real provider expiry and external-provider evidence remain open.
+
+Invalid-key probes found and reproduced two errors: Codex emitted an empty
+completion marker after a rejected request, which was previously counted as
+success; Claude exposed its logged-out status only in the terminal and waited for
+a nonexistent transcript. Both invalid-key probes now pass after explicit
+failure/uncertainty handling and footer-scoped authentication detection. Aborted
+Codex turns are no longer normalized as successful. Added three regression tests;
+the unit suite now has 45 passing tests. These rejection probes use no valid keys
+and do not prove successful API-key authentication or real provider token expiry.
+
+Final authentication regression: six live cases passed (both native harnesses'
+session and direct-terminal recovery plus invalid-key rejection); three cases
+requiring valid API keys or a remote model remained skipped. The standard suite
+passed 48 tests, with its separate wheel gate skipped and live cases deselected.
+Ruff, source/wheel builds and the separately run installed-wheel gate passed.
+Release completion remains blocked on a
+disposable Linux test environment, successful real API-key/provider validation,
+and provider-side expiry evidence; those prerequisites are not configured here.

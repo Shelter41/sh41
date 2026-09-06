@@ -12,6 +12,9 @@ SH41_TEST_NATIVE=1 .venv/bin/pytest -q tests/test_live.py
 SH41_TEST_MCP=1 .venv/bin/pytest -q tests/test_mcp_live.py
 SH41_TEST_OLLAMA=1 .venv/bin/pytest -q tests/test_local_model.py
 SH41_TEST_OLLAMA=1 SH41_TEST_OFFLINE=1 .venv/bin/pytest -q tests/test_local_model.py
+SH41_TEST_API_KEYS=1 .venv/bin/pytest -q tests/test_external_acceptance.py -k api_key
+SH41_TEST_REMOTE=1 .venv/bin/pytest -q tests/test_external_acceptance.py -k remote
+SH41_TEST_KEY_REJECTION=1 .venv/bin/pytest -q tests/test_external_acceptance.py -k rejected_clearly
 ```
 
 Native and MCP tests explicitly import existing Claude/Codex logins and consume
@@ -39,6 +42,26 @@ To check a built wheel end to end, install it into a separate virtual environmen
 and set `SH41_TEST_WHEEL_PYTHON` to that environment's absolute Python path, then
 run `pytest -q tests/test_wheel.py`. This executes the installed CLI and supervisor
 outside the checkout, including deployment, a real harness turn, history and park.
+
+API-key acceptance requires `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` in the local
+environment. Use `-k codex` or `-k claude` to select just one harness. Optional
+`SH41_TEST_CODEX_MODEL` and `SH41_TEST_CLAUDE_MODEL` select models allowed by those
+accounts. The tests use fresh state with no native account imports, then check a
+valid key, a deliberately invalid test key, and recovery with the valid key. They
+do not revoke or modify your real provider credentials. Actual provider-side token
+expiry remains a separate manual check.
+
+Remote-model acceptance requires `SH41_TEST_REMOTE_URL` (container-reachable
+Chat Completions base URL) and `SH41_TEST_REMOTE_MODEL`. Choose an actual remote
+open-weight model for the release gate. Set `SH41_TEST_REMOTE_KEY_ENV` to the name
+of its key variable when authentication is required. This test requires a real
+file edit and a completed bash unittest invocation, then independently reruns the
+tests in the sandbox and checks the original source is unchanged. These tests
+consume provider usage; enable them deliberately. Missing required variables fail
+an explicitly enabled gate rather than silently skipping it. Do not use pytest's
+`--showlocals` with credentials, and do not paste keys into commands or reports.
+The separate key-rejection gate contacts the native providers with a deliberately
+invalid key. It needs network access but no valid credentials or paid inference.
 
 ## Manual Release Gates
 

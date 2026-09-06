@@ -265,6 +265,8 @@ class Manager:
                 self.driver.send_message(handle, payload["message"])
                 deadline = time.monotonic() + 90
                 while path is None and time.monotonic() < deadline and not self.cancel.is_set():
+                    if self.spec.harness == "claude-code":
+                        self.driver.check_authentication(self.runtime.inspect(handle).output)
                     path = self.driver.resolve_transcript(self.state, cwd=CWD, after_mtime=started)
                     time.sleep(0.25)
                 if path is None:
@@ -279,9 +281,13 @@ class Manager:
                     self.state["jsonl_path"] = str(path)
                 self.save_state()
                 terminal = []
+                output_seen = False
 
                 def emit(event):
+                    nonlocal output_seen
                     self.emit(ident, event)
+                    if event.get("type") == "assistant":
+                        output_seen = True
                     if event.get("type") == "result" or is_turn_complete(event):
                         terminal.append(event)
 
@@ -292,6 +298,14 @@ class Manager:
                         (e.get("message") or {}).get("stop_reason") in {"refusal", "max_tokens"}
                         for e in terminal)
                     status = "failed" if failed else "completed"
+                    if status == "completed" and not output_seen and not any(e.get("result") for e in terminal):
+                        detail = redact(self.runtime.inspect(handle).output[-2500:], self.secrets)
+                        auth_failed = any(marker in detail.lower() for marker in (
+                            "401", "unauthorized", "incorrect api key", "invalid api key", "authentication",
+                        ))
+                        status = "failed" if auth_failed else "interrupted"
+                        message = "Harness authentication failed. " if auth_failed else "No response or tool execution confirmed. "
+                        self.emit(ident, {"type": "error", "message": message + "Terminal diagnostic: " + detail})
                 else:
                     self.emit(ident, {"type": "error", "message": "No confirmed turn completion. Terminal diagnostic: " +
                         redact(self.runtime.inspect(handle).output[-2500:], self.secrets)})

@@ -155,6 +155,18 @@ class ClaudeDriver:
             marker in output for marker in _UI_MARKERS
         )
 
+    @staticmethod
+    def check_authentication(output: str) -> None:
+        lines = output.splitlines()
+        composers = [index for index, line in enumerate(lines) if line.strip() in {"❯", ">"}]
+        if not composers:
+            return
+        footer = "\n".join(lines[composers[-1] + 1:]).lower()
+        if any(marker in footer for marker in (
+            "not logged in", "invalid api key", "invalid x-api-key", "authentication failed",
+        )):
+            raise RuntimeError("Claude Code authentication failed; verify the API key or re-import the native login")
+
     def wait_for_ready(
         self,
         handle: RuntimeHandle,
@@ -169,6 +181,7 @@ class ClaudeDriver:
             status = self.runtime.inspect(handle)
             last = status.output
             lower = last.lower()
+            self.check_authentication(last)
             if self.detect_onboarding(last):
                 raise RuntimeError(
                     "Claude Code is not pre-configured. Run `sh41 claude-auth` first. "

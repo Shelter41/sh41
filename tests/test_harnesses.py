@@ -154,3 +154,34 @@ def test_detached_codex_native_turn_is_busy(tmp_path):
     with path.open("a") as stream:
         stream.write('{"type":"event_msg","payload":{"type":"task_complete"}}\n')
     assert not manager.busy()
+
+
+def test_native_auth_and_abort_are_not_success():
+    from sh41_local.drivers.codex_events import normalize_rollout_line
+    with pytest.raises(RuntimeError, match="authentication failed"):
+        ClaudeDriver.check_authentication("\u276f\nNot logged in - Run /login")
+    ClaudeDriver.check_authentication("An earlier message said authentication failed\n\u276f\nReady")
+    events, _ = normalize_rollout_line('{"type":"event_msg","payload":{"type":"turn_aborted"}}')
+    assert events[0]["is_error"]
+
+
+@pytest.mark.parametrize("diagnostic,expected", [("401 Unauthorized: incorrect API key", "failed"),
+                                               ("Idle composer", "interrupted")])
+def test_empty_native_completion_is_not_success(tmp_path, monkeypatch, diagnostic, expected):
+    from types import SimpleNamespace
+    manager = Manager(tmp_path)
+    manager.spec = AgentSpec(agent="test", harness="codex")
+    transcript = tmp_path / "native.jsonl"
+    transcript.write_text("")
+    native_id = str(uuid.uuid4())
+    manager.driver = SimpleNamespace(resolve_transcript=lambda *args, **kwargs: transcript,
+        transcript_offset=lambda path: 0, send_message=lambda *args: None,
+        transcript_session_id=lambda path: native_id,
+        consume_transcript=lambda path, offset, emit, **kwargs: emit(
+            {"type": "result", "result": "", "is_error": False}))
+    manager.runtime = SimpleNamespace(inspect=lambda handle: SimpleNamespace(output=diagnostic))
+    monkeypatch.setattr(manager, "ensure_session", lambda *args: "handle")
+    monkeypatch.setattr(manager, "save_state", lambda: None)
+    ident = str(uuid.uuid4())
+    manager.execute({"run_id": ident, "session_id": str(uuid.uuid4()), "message": "hello"})
+    assert manager.dispatch({"op": "run-status", "run_id": ident})["status"] == expected

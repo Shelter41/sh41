@@ -21,9 +21,11 @@ or submitted run owns input at a time. A read-only observer cannot submit turns.
 Submitted turns have immutable IDs and fsynced event/status journals. The supervisor
 imports normalized events idempotently into SQLite. A lost client reply does not
 cause a replay; status is reconciled by ID. A restarted manager marks unfinished
-journals interrupted. Native conversation files and IDs survive recreation. Direct
-terminal turns stay in the harness history rather than acquiring synthetic sh41
-run records. OpenCode's message API returns tool/result events after completion;
+journals interrupted. Native conversation files and IDs survive recreation.
+Empty native completion markers without a response or tool activity are not
+reported as successful; authentication diagnostics distinguish failed requests
+from uncertain completion. Direct terminal turns stay in the harness history
+rather than acquiring synthetic sh41 run records. OpenCode's message API returns tool/result events after completion;
 Claude/Codex JSONL is polled incrementally.
 
 Common MCP definitions translate to each harness's native config. Imported account

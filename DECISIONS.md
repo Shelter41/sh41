@@ -12,4 +12,5 @@
 - Require explicit credential import or environment references because host credentials should not be silently mounted into agents.
 - Preserve direct TUI history natively rather than inventing unreliable run boundaries from terminal scraping.
 - Do not replay uncertain or interrupted turns because tool actions may already have happened.
+- An empty native completion marker is insufficient proof of success because Codex can emit it after an authentication failure.
 - Keep network egress unrestricted for the MVP and document Docker's limits rather than advertising hostile-code or air-gap security.

@@ -310,7 +310,10 @@ def _normalize_rollout_event_msg(payload: dict[str, Any]) -> tuple[list[dict[str
         usage = _rollout_token_usage(payload)
         return ([_usage(usage)] if usage else []), False
 
-    if ptype in {"task_complete", "turn_aborted"}:
+    if ptype == "turn_aborted":
+        return [_result("Codex turn was aborted", is_error=True)], False
+
+    if ptype == "task_complete":
         # Turn boundary — emit a (empty) result so the tail loop stops.
         return [_result("", is_error=False)], False
 

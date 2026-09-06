@@ -234,7 +234,7 @@ SH41_TEST_DOCKER=1 .venv/bin/pytest -q -m 'docker and not live'
 ```
 
 Live tests are opt-in and may use account quotas. See [TESTING.md](TESTING.md) for
-the matrix, local-model tests, and recovery checks. CI runs unit checks on macOS
+the matrix, local-model tests, API-key/remote-endpoint gates, and recovery checks. CI runs unit checks on macOS
 and Linux and uncredentialed Docker integration on Linux.
 
 - Docker unavailable: start Docker, then `sh41 doctor`. Image-build failures are
