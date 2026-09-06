@@ -7,11 +7,12 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.theme import Theme
-from textual.widgets import Button, DataTable, Footer, Header, Input, Select, Static, TabbedContent, TabPane
+from textual.widgets import Button, DataTable, Footer, Header, Input, OptionList, Select, Static, TabbedContent, TabPane
 
 from .client import Client, background
 from .dialogs import Prompt, Records
 from .wizard import Wizard, import_spec
+from .sidebar import Sidebar
 
 
 def plain(value):
@@ -54,7 +55,10 @@ class Shell(App):
     Tab { color: #9b9386; }
     Tab.-active { color: #f0a84b; text-style: bold; }
     #health { height: 1; padding: 0 1; color: $text-muted; }
-    TabbedContent { height: 1fr; }
+    #shell-body { height: 1fr; }
+    Sidebar .section-link, Sidebar .section-link:hover, Sidebar .section-link:focus {
+        border: none; background: transparent; }
+    TabbedContent { height: 1fr; width: 1fr; }
     TabPane { padding: 0 1; }
     .toolbar { height: 3; margin-bottom: 1; }
     .toolbar Button { min-width: 10; margin-right: 1; }
@@ -82,6 +86,8 @@ class Shell(App):
         self.polling = set()
         self.submitted = set()
         self.attaching = False
+        self.connected = False
+        self.failed = set()
         # Copy the cloud dark-theme tokens without depending on its frontend package.
         self.register_theme(Theme(name="shelter41", primary="#ee982e", secondary="#aaa195",
             accent="#f0a13d", foreground="#eee9df", background="#050504",
@@ -103,32 +109,34 @@ class Shell(App):
     def compose(self) -> ComposeResult:
         yield Header()
         yield Static("Connecting to local supervisor...", id="health", markup=False)
-        with TabbedContent(initial="agents-view", id="views"):
-            with TabPane("Agents", id="agents-view"):
-                with Horizontal(classes="toolbar"):
-                    yield Input(placeholder="Filter agents", id="filter")
-                    yield Button("New", id="new-agent", variant="primary")
-                    yield Button("Import YAML", id="import-yaml")
-                yield DataTable(id="agents-table", cursor_type="row")
-                yield Static("No agents", id="agent-detail", markup=False)
-                with Horizontal(id="agent-controls"):
-                    yield Button("Attach", id="attach", variant="primary", disabled=True)
-                    yield Select([(label, value) for label, value in (
-                        ("Start terminal", "start"), ("Read-only attach", "readonly"),
-                        ("Pause", "pause"), ("Resume", "resume"), ("Park", "park"),
-                        ("Redeploy", "redeploy"), ("Interrupt", "interrupt"),
-                        ("Conversations", "sessions"), ("Run history", "history"),
-                        ("Export workspace", "export"))], value="start", allow_blank=False, id="agent-action")
-                    yield Button("Apply", id="apply", disabled=True)
-            with TabPane("Models", id="models-view"):
-                yield Static("Ollama: checking", id="model-server", markup=False)
-                with Horizontal(classes="toolbar"):
-                    yield Button("Start / Reuse", id="models-start")
-                    yield Button("Pull model", id="models-pull", variant="primary")
-                    yield Button("Stop server", id="models-stop", disabled=True)
-                yield DataTable(id="models-table", cursor_type="row")
-            with TabPane("Operations", id="operations-view"):
-                yield DataTable(id="operations-table", cursor_type="row")
+        with Horizontal(id="shell-body"):
+            yield Sidebar(id="sidebar")
+            with TabbedContent(initial="agents-view", id="views"):
+                with TabPane("Agents", id="agents-view"):
+                    with Horizontal(classes="toolbar"):
+                        yield Input(placeholder="Filter agents", id="filter")
+                        yield Button("New", id="new-agent", variant="primary")
+                        yield Button("Import YAML", id="import-yaml")
+                    yield DataTable(id="agents-table", cursor_type="row")
+                    yield Static("No agents", id="agent-detail", markup=False)
+                    with Horizontal(id="agent-controls"):
+                        yield Button("Attach", id="attach", variant="primary", disabled=True)
+                        yield Select([(label, value) for label, value in (
+                            ("Start terminal", "start"), ("Read-only attach", "readonly"),
+                            ("Pause", "pause"), ("Resume", "resume"), ("Park", "park"),
+                            ("Redeploy", "redeploy"), ("Interrupt", "interrupt"),
+                            ("Conversations", "sessions"), ("Run history", "history"),
+                            ("Export workspace", "export"))], value="start", allow_blank=False, id="agent-action")
+                        yield Button("Apply", id="apply", disabled=True)
+                with TabPane("Models", id="models-view"):
+                    yield Static("Ollama: checking", id="model-server", markup=False)
+                    with Horizontal(classes="toolbar"):
+                        yield Button("Start / Reuse", id="models-start")
+                        yield Button("Pull model", id="models-pull", variant="primary")
+                        yield Button("Stop server", id="models-stop", disabled=True)
+                    yield DataTable(id="models-table", cursor_type="row")
+                with TabPane("Operations", id="operations-view"):
+                    yield DataTable(id="operations-table", cursor_type="row")
         yield Static("", id="notice", markup=False)
         yield Footer()
 
@@ -140,6 +148,7 @@ class Shell(App):
         self.q("#agents-table", DataTable).add_columns("Agent", "State", "Activity", "Harness", "Model", "Workspace")
         self.q("#models-table", DataTable).add_columns("Model", "Downloaded", "Loaded", "Disk", "Memory", "Agents", "Expires")
         self.q("#operations-table", DataTable).add_columns("ID", "Action", "Agent", "Status", "Progress")
+        self.q("#sidebar", Sidebar).render_state(self.snapshot, self.models, self.failed, self.connected)
         self.set_interval(2, self.refresh_agents)
         self.set_interval(5, self.refresh_models)
         self.action_refresh()
@@ -164,6 +173,8 @@ class Shell(App):
     async def fetch(self, key, op):
         try:
             result = await background(self.client.call, {"op": op})
+            self.connected = True
+            self.failed.discard(key)
             if key == "agents":
                 self.snapshot = result
                 self.render_agents()
@@ -176,6 +187,7 @@ class Shell(App):
                         screen.update_model_snapshot(result)
             self.render_health()
         except (ValueError, RuntimeError, OSError):
+            self.failed.add(key)
             if key == "agents":
                 self.q("#health", Static).update("Supervisor disconnected | Displayed data is stale")
             else:
@@ -184,7 +196,32 @@ class Shell(App):
                     if isinstance(screen, Wizard):
                         screen.update_model_snapshot(dict(self.models, stale=True))
         finally:
+            self.q("#sidebar", Sidebar).render_state(self.snapshot, self.models, self.failed, self.connected)
             self.polling.discard(key)
+
+    @on(OptionList.OptionSelected, "#sidebar-agents")
+    def sidebar_agent(self, event):
+        self.q("#views", TabbedContent).active = "agents-view"
+        self.q("#filter", Input).value = ""
+        self.render_agents()
+        table = self.q("#agents-table", DataTable)
+        keys = [str(key.value) for key in table.rows]
+        if event.option_id in keys:
+            table.move_cursor(row=keys.index(event.option_id))
+            table.focus()
+
+    @on(OptionList.OptionSelected, "#sidebar-models")
+    def sidebar_model(self, event):
+        self.q("#views", TabbedContent).active = "models-view"
+        table = self.q("#models-table", DataTable)
+        keys = [str(key.value) for key in table.rows]
+        if event.option_id in keys:
+            table.move_cursor(row=keys.index(event.option_id))
+            table.focus()
+
+    @on(OptionList.OptionHighlighted, "#sidebar-agents, #sidebar-models")
+    def sidebar_tooltip(self, event):
+        event.control.tooltip = plain(event.option_id)
 
     def render_health(self):
         docker = self.snapshot.get("docker", {})
@@ -404,8 +441,12 @@ class Shell(App):
             self.attach_agent()
         elif ident == "apply":
             self.apply_action()
-        elif ident == "models-start":
+        elif ident in {"models-start", "sidebar-ollama-start"}:
             self.submit_job("models-start")
+        elif ident == "sidebar-agents-nav":
+            self.q("#views", TabbedContent).active = "agents-view"
+        elif ident == "sidebar-models-nav":
+            self.q("#views", TabbedContent).active = "models-view"
         elif ident == "models-pull":
             self.push_screen(Prompt("Local model tag"), lambda model:
                 self.submit_job("models-pull", model=model) if model else None)

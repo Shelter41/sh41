@@ -89,7 +89,7 @@ container restart as a machine reboot, or fixture completions as model quality.
 ## Shell Acceptance
 
 ```sh
-.venv/bin/pytest -q tests/test_control.py tests/test_tui.py
+.venv/bin/pytest -q tests/test_control.py tests/test_tui.py tests/test_sidebar.py
 SH41_TEST_DOCKER=1 .venv/bin/pytest -q tests/test_shell_live.py
 ```
 
@@ -99,6 +99,10 @@ both MCP forms, filename collisions, Save Only and Save and Start. Set
 `SH41_TEST_SCREENSHOTS` to an existing private directory to retain rendered SVG
 screenshots and fixture-only PTY output (never enable output capture for real
 credentialed harness tests). `NO_COLOR` is respected by the UI.
+
+Sidebar tests cover runtime/stale states, loaded-only model inventory, explicit
+Ollama startup, pending-operation guards, keyboard navigation, long names and
+fixed-width layout at both terminal sizes.
 
 The real shell test starts two detached OpenCode terminals without a model prompt,
 attaches and detaches through Textual, resizes the terminal, closes and kills shell

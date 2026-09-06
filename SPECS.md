@@ -28,6 +28,12 @@ state separately. Ollama GET version/tags/ps probes discover the selected servic
 without starting it, adopting ownership or pulling a model. Downloaded weights,
 loaded memory and configured agent model references are distinct concepts.
 
+A fixed-width left sidebar consumes these same polls and exposes runtime health,
+agent lifecycle/activity, and loaded models, preserving list selection on refresh.
+Its Ollama start control submits the existing supervisor-owned background job;
+it introduces no process management or additional polling in the UI. Sidebar
+selection navigates the main tables without attaching or starting an agent.
+
 The architecture diagram and phase acceptance checklist are in SHELL_PLAN.md.
 The shell copies Shelter41's dark-theme color tokens locally and uses a persistent
 Shelter41 header; typography is limited to terminal-supported weight and emphasis,

@@ -76,6 +76,11 @@ Start is idempotent and does not send a prompt. Shell Resume/Redeploy and
 conversation changes also start the selected native terminal; the existing CLI
 commands retain their original lifecycle behavior, with `sh41 start NAME` added.
 
+The persistent left sidebar shows supervisor, Docker and Ollama health, agent
+states, and currently loaded models with memory usage. Select an agent or model
+to open its view; **Start Ollama** starts/reuses the selected local service through
+the supervisor. Stale observations are marked rather than shown as running.
+
 The **Models** view distinguishes downloaded weights from loaded models, reports
 Ollama ownership and reachability, and offers Start/Reuse, Pull and guarded Stop.
 Model rows list agent configuration references, not exclusive GPU ownership.

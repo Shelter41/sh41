@@ -1,5 +1,7 @@
 # Decisions
 
+- Keep runtime health, agents and loaded models in a persistent sidebar using existing snapshots and jobs so navigation cannot change process lifecycle implicitly.
+
 - Keep an independent package and repository so local execution cannot accidentally depend on the SaaS installation.
 - Use Apache-2.0 for sh41 code while leaving harness and model licensing independent.
 - Keep `sh41` as the executable and `sh41-local` as the distribution to preserve familiarity without conflating packages.
