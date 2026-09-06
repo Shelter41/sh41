@@ -21,7 +21,7 @@ sh41 = "sh41_local.cli:main"
 packages = ["src/sh41_local"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/examples", "/*.md", "/LICENSE", "/pyproject.toml", "/.github", "/.gitignore"]
+include = ["/src", "/tests", "/examples", "/docs", "/*.md", "/LICENSE", "/pyproject.toml", "/.github", "/.gitignore"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
