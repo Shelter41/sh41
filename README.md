@@ -71,7 +71,11 @@ and Pull model are available there; opening the wizard never starts a server or
 downloads weights automatically. Library browsing stays inside the terminal and
 does not require a running Ollama server, but needs internet access to ollama.com.
 If the library is unavailable, downloaded models and custom entry remain usable.
-Pull model explicitly downloads the chosen tag; Save and Start also downloads
+Pull model confirms the selected tag without asking you to retype it. A sole local
+variant is selected automatically; multiple variants require a choice. Pull is
+unavailable while a library family has no resolved local variant, including failed
+lookups or cloud-only models. Manual tag entry remains available for custom models.
+Save and Start also downloads
 missing weights during deployment. Save Only writes YAML without downloading.
 It never overwrites a file, and saved YAML remains available if deployment fails.
 

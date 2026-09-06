@@ -58,6 +58,12 @@ different model selection. Requests have timeouts and response-size limits; libr
 failures leave local/custom choices usable. This public-page adapter is not a
 stable Ollama catalog API and may need adjustment if their markup changes.
 Compatible-endpoint/native models remain free text.
+
+Library filtering reads cloud and parameter-size badges, not parameter counts in
+descriptions. Pull confirms an already resolved model tag and preserves the wizard
+selection; unresolved library choices cannot fall through to manual tag entry.
+A single downloadable variant resolves automatically, while multiple variants
+remain explicit. Empty/failed lookups block Pull without guessing a default tag.
 Wizard model snapshots retain server health and address rather than reducing
 unavailable inventories to an unexplained empty list. Explicit start/pull actions
 use the existing supervisor jobs. CLI model listing uses the same passive discovery

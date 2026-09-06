@@ -328,7 +328,15 @@ class Wizard(Dialog):
 
     @on(Button.Pressed, "#wizard-ollama-pull")
     def pull_ollama(self):
-        self.app.push_screen(Prompt("Download Ollama model tag", initial=self.value("model")), self.download_model)
+        model = self.value("model")
+        if self.variant_key and not model:
+            self.query_one("#library-variant").scroll_visible()
+            return
+        if model:
+            self.app.push_screen(Prompt(f"Download Ollama model {model}?", confirm=True),
+                                 lambda yes: self.app.submit_job("models-pull", model=model) if yes else None)
+        else:
+            self.app.push_screen(Prompt("Download Ollama model tag"), self.download_model)
 
     def download_model(self, model):
         if model:
@@ -369,7 +377,8 @@ class Wizard(Dialog):
     @work(exit_on_error=False)
     async def load_library(self, key, number):
         self.query_one("#library-more", Button).disabled = True
-        self.query_one("#library-status", Static).update("Searching Ollama library...")
+        if not self.variant_key:
+            self.query_one("#library-status", Static).update("Searching Ollama library...")
         try:
             names, more = await background(catalog.search, key[0], number)
             if not self.is_mounted or key != self.library_key:
@@ -378,8 +387,9 @@ class Wizard(Dialog):
             self.library_page = number
             self.refresh_model_options()
             self.query_one("#library-more", Button).disabled = not more
-            self.query_one("#library-status", Static).update(
-                f"{len(self.library)} library families" if self.library else "No matching local tool models")
+            if not self.variant_key:
+                self.query_one("#library-status", Static).update(
+                    f"{len(self.library)} library families" if self.library else "No matching local tool models")
         except (ValueError, OSError) as exc:
             if self.is_mounted and key == self.library_key:
                 self.query_one("#library-status", Static).update(str(exc))
@@ -395,7 +405,11 @@ class Wizard(Dialog):
                 selector.set_options([(f"{name} ({size}; download)", name) for name, size in rows])
                 selector.clear()
             self.query_one("#library-status", Static).update(
-                "Choose a variant; download required" if rows else "No local variants available")
+                "Choose a variant; download required" if rows else
+                "No downloadable local variants found; choose another model. Cloud-only models cannot run locally.")
+            if len(rows) == 1:
+                selector.value = rows[0][0]
+            self.update_model_fields()
         except (ValueError, OSError) as exc:
             if self.is_mounted and key == self.variant_key:
                 self.query_one("#library-status", Static).update(str(exc))
@@ -407,6 +421,7 @@ class Wizard(Dialog):
             self.query_one("#library-status", Static).update(
                 "Choose a local variant" if event.value is Select.NULL else
                 "Downloaded" if event.value in self.models else "Download required on Pull or Save and Start")
+            self.update_model_fields()
 
     def update_models(self, models):
         names = sorted({model for model in models if isinstance(model, str) and model})
@@ -433,6 +448,7 @@ class Wizard(Dialog):
                       "#library-search-controls", "#library-status"):
             self.query_one(ident).display = ollama
         self.query_one("#library-variant").display = ollama and self.variant_key is not None
+        self.query_one("#wizard-ollama-pull", Button).disabled = bool(self.variant_key and not self.value("model"))
         state = self.model_state
         url = state.get("url", "configured server")
         if state.get("state") == "ready":

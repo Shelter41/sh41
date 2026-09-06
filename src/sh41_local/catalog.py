@@ -13,6 +13,8 @@ class LibraryPage(HTMLParser):
         self.parts = []
         self.more = False
         self.empty = False
+        self.badges = {}
+        self.badge_parts = None
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -21,14 +23,21 @@ class LibraryPage(HTMLParser):
         if tag == "a":
             self.current = attrs.get("href", "")
             self.parts = []
+        if tag == "span" and self.current and "inline-flex" in attrs.get("class", "").split():
+            self.badge_parts = []
 
     def handle_data(self, data):
         if "No models found." in data:
             self.empty = True
         if self.current:
             self.parts.append(data)
+        if self.badge_parts is not None:
+            self.badge_parts.append(data)
 
     def handle_endtag(self, tag):
+        if tag == "span" and self.badge_parts is not None:
+            self.badges.setdefault(self.current, []).append("".join(self.badge_parts).strip())
+            self.badge_parts = None
         if tag == "a" and self.current:
             content = " ".join(" ".join(self.parts).split())
             if len(content) > len(self.links.get(self.current, "")):
@@ -59,11 +68,12 @@ def page(path, **params):
 def search(query="", number=1):
     result = page("/search", c="tools", q=query, page=number)
     names = []
-    for href, content in result.links.items():
+    for href in result.links:
         match = re.fullmatch(r"/library/([a-zA-Z0-9][a-zA-Z0-9._-]*)", href)
         if match:
             # Cloud-only families have no parameter-size badge on the library card.
-            if re.search(r"\bcloud\b", content) and not re.search(r"\b\d+(?:\.\d+)?[bm]\b", content, re.I):
+            badges = result.badges.get(href, [])
+            if "cloud" in badges and not any(re.fullmatch(r"\d+(?:\.\d+)?[bm]", badge, re.I) for badge in badges):
                 continue
             names.append(match[1])
     if not names and not result.links and not result.empty:

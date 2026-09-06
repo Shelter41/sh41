@@ -114,6 +114,11 @@ Autocomplete tests exercise typing, arrow/Enter selection, mouse selection,
 Escape and focus-loss dismissal, variant invalidation on edits, and popup bounds
 at 80x24 and 120x40. They retain `model-autocomplete-*.svg` with screenshot capture.
 
+`tests/test_model_pull.py` covers absent/failed variants, single-variant resolution,
+explicit multi-variant choices, exact-tag confirmation, cancellation and selection
+preservation. Catalog fixtures include cloud-only cards whose descriptions mention
+parameter counts, so those numbers cannot masquerade as download badges.
+
 The real shell test starts two detached OpenCode terminals without a model prompt,
 attaches and detaches through Textual, resizes the terminal, closes and kills shell
 processes, verifies a running turn finishes, reopens the dashboard and checks

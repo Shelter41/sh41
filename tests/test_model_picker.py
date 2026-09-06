@@ -20,7 +20,7 @@ async def test_combined_search_keyboard_mouse_and_variant_reset(monkeypatch, dim
         return ["qwen3", "qwen3-coder"], False
 
     monkeypatch.setattr(catalog, "search", search)
-    monkeypatch.setattr(catalog, "variants", lambda family: [(family + ":4b", "2.5GB")])
+    monkeypatch.setattr(catalog, "variants", lambda family: [(family + ":4b", "2.5GB"), (family + ":8b", "5GB")])
     app = Shell(FakeClient())
     async with app.run_test(size=dimensions) as pilot:
         await settled(pilot, app)

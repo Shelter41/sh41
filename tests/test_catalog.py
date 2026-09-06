@@ -22,8 +22,10 @@ def parsed(html):
 
 def test_library_parser_filters_cloud_and_unsafe_links(monkeypatch):
     search = parsed('''<a href="/library/qwen3">qwen3 tools 4b 8b</a>
-        <a href="/library/remote">remote tools cloud</a>
-        <a href="/library/hybrid">hybrid tools cloud 8b</a>
+        <a href="/library/remote"><p>18B active parameters</p>
+          <span class="inline-flex">cloud</span></a>
+        <a href="/library/hybrid"><span class="inline-flex">cloud</span>
+          <span class="inline-flex">8b</span></a>
         <a href="https://evil.test/library/other">other</a>
         <a href="/library/../bad">bad</a><a href="/someone/custom">custom</a>
         <li hx-get="/search?page=2"></li>''')
@@ -108,7 +110,11 @@ async def test_library_dropdown_variants_paging_and_save_only(tmp_path, monkeypa
         wizard.update_models(["new:4b"])
         assert selector.value == "@library/qwen3"
         wizard.more_library()
-        await catalog_settled(pilot, wizard, "2 library")
+        for _ in range(50):
+            await pilot.pause(0.03)
+            if len(wizard.library) == 2:
+                break
+        assert len(wizard.library) == 2
         assert selector.value == "@library/qwen3" and variants.value == "qwen3:4b"
         assert not client.submissions
         assert wizard.query_one("#next").region.bottom <= dimensions[1]

@@ -1,5 +1,7 @@
 # Decisions
 
+- Disable Pull for unresolved library choices instead of guessing a tag or requesting manual entry, while resolving a sole downloadable variant automatically and confirming the exact selected tag before download.
+
 - Combine Ollama search and model selection in an autocomplete field while retaining a separate explicit local-variant choice to reduce controls without silently choosing model sizes.
 
 - Browse Ollama's live tool-model library inside the wizard through a bounded read-only page adapter, with explicit local-variant selection and no implicit downloads, because the local models API only lists downloaded weights.
