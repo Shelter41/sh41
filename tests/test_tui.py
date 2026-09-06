@@ -309,8 +309,6 @@ async def test_model_inventory_refreshes_open_wizard():
 @pytest.mark.parametrize("dimensions", [(80, 24), (120, 40)])
 async def test_ollama_unavailable_empty_and_download_actions(dimensions, monkeypatch):
     client = FakeClient(0)
-    opened = []
-    monkeypatch.setattr("sh41_local.tui.wizard.webbrowser.open", lambda url, **kwargs: opened.append(url) or True)
     app = Shell(client)
     async with app.run_test(size=dimensions) as pilot:
         await settled(pilot, app)
@@ -321,10 +319,6 @@ async def test_ollama_unavailable_empty_and_download_actions(dimensions, monkeyp
         wizard.update_model_snapshot({"state": "unreachable", "url": "http://localhost:11434", "models": None})
         assert "unavailable" in str(wizard.query_one("#ollama-status", Static).content)
         assert not client.submissions
-        assert not opened
-        wizard.query_one("#wizard-ollama-library").scroll_visible()
-        await click(pilot, "#wizard-ollama-library")
-        assert opened == ["https://ollama.com/search?c=tools"]
         import os
         if os.environ.get("SH41_TEST_SCREENSHOTS"):
             app.save_screenshot(f"ollama-unavailable-{dimensions[0]}x{dimensions[1]}.svg",

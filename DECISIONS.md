@@ -1,5 +1,7 @@
 # Decisions
 
+- Browse Ollama's live tool-model library inside the wizard through a bounded read-only page adapter, with explicit local-variant selection and no implicit downloads, because the local models API only lists downloaded weights.
+
 - Keep runtime health, agents and loaded models in a persistent sidebar using existing snapshots and jobs so navigation cannot change process lifecycle implicitly.
 
 - Keep an independent package and repository so local execution cannot accidentally depend on the SaaS installation.

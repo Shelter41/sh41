@@ -89,7 +89,7 @@ container restart as a machine reboot, or fixture completions as model quality.
 ## Shell Acceptance
 
 ```sh
-.venv/bin/pytest -q tests/test_control.py tests/test_tui.py tests/test_sidebar.py
+.venv/bin/pytest -q tests/test_control.py tests/test_tui.py tests/test_sidebar.py tests/test_catalog.py
 SH41_TEST_DOCKER=1 .venv/bin/pytest -q tests/test_shell_live.py
 ```
 
@@ -103,6 +103,12 @@ credentialed harness tests). `NO_COLOR` is respected by the UI.
 Sidebar tests cover runtime/stale states, loaded-only model inventory, explicit
 Ollama startup, pending-operation guards, keyboard navigation, long names and
 fixed-width layout at both terminal sizes.
+
+Catalog fixtures cover official-link parsing, duplicate tags, cloud exclusion,
+offline fallback, search races, pagination, keyboard variant selection, preserved
+selections and side-effect-free YAML saving at both sizes. Automated tests stub
+the remote library; a live read-only check of search and tags is separate from
+model-download or inference acceptance.
 
 The real shell test starts two detached OpenCode terminals without a model prompt,
 attaches and detaches through Textual, resizes the terminal, closes and kills shell

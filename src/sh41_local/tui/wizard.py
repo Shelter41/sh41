@@ -1,6 +1,5 @@
 import json
 import secrets
-import webbrowser
 from pathlib import Path
 
 from textual import on, work
@@ -8,6 +7,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, ContentSwitcher, Input, Label, Select, Static, TextArea
 
 from ..credentials import import_native
+from .. import catalog
 from ..manifests import build_spec, write_manifest
 from ..paths import state_home
 from ..spec import parse_yaml
@@ -102,6 +102,9 @@ class Wizard(Dialog):
     Wizard #source-controls { height: 3; margin: 0; }
     Wizard #source { width: 1fr; }
     Wizard #source-browse { min-width: 10; width: 10; }
+    Wizard #library-search-controls { height: 3; margin: 0; }
+    Wizard #library-search { width: 1fr; }
+    Wizard #library-search-controls Button { min-width: 12; width: 12; }
     """
 
     def __init__(self, models=(), spec=None, model_state=None):
@@ -115,6 +118,11 @@ class Wizard(Dialog):
         self.source_info = None
         self.inspection_key = None
         self.inspection_timer = None
+        self.library = []
+        self.library_page = 0
+        self.library_key = None
+        self.library_timer = None
+        self.variant_key = None
 
     def compose(self):
         spec = self.initial
@@ -143,14 +151,19 @@ class Wizard(Dialog):
                     yield Select([("Ollama", "ollama"), ("Compatible endpoint", "openai-compatible"),
                                   ("Native provider", "native")], allow_blank=False,
                                  value=spec.inference.provider if spec else "ollama", id="provider")
-                    yield Label("Downloaded Ollama model", id="installed-label")
+                    with Horizontal(id="library-search-controls"):
+                        yield Input(placeholder="Search Ollama library", id="library-search")
+                        yield Button("Refresh", id="library-refresh")
+                        yield Button("More", id="library-more", disabled=True)
+                    yield Label("Ollama model", id="installed-label")
                     yield Select(self.model_options(), value=spec.model if spec and spec.model in self.models else "",
                                  allow_blank=False, id="installed")
+                    yield Select([], prompt="Choose local variant", id="library-variant")
+                    yield Static("", id="library-status", markup=False)
                     yield Static("", id="ollama-status", markup=False)
                     with Horizontal(id="ollama-controls"):
                         yield Button("Start / Reuse", id="wizard-ollama-start")
                         yield Button("Pull model", id="wizard-ollama-pull")
-                        yield Button("Model library", id="wizard-ollama-library")
                     yield Label("Model name (native default when blank)", id="model-label")
                     yield Input(spec.model or "" if spec else "", id="model")
                     yield Label("Compatible endpoint URL", id="endpoint-label")
@@ -277,6 +290,7 @@ class Wizard(Dialog):
         self.query_one("#next").display = self.step < 3
         self.query_one("#save").display = self.step == 3
         self.query_one("#deploy").display = self.step == 3
+        self.ensure_library()
 
     def update_mcp(self):
         self.query_one("#mcp-list", Static).update("\n".join(
@@ -284,12 +298,23 @@ class Wizard(Dialog):
 
     @on(Select.Changed, "#installed")
     def installed(self, event):
-        if event.value and event.value is not Select.NULL:
+        self.variant_key = None
+        if isinstance(event.value, str) and event.value.startswith("@library/"):
+            self.query_one("#model", Input).value = ""
+            self.variant_key = (event.value, object())
+            selector = self.query_one("#library-variant", Select)
+            with selector.prevent(Select.Changed):
+                selector.set_options([])
+                selector.clear()
+            self.query_one("#library-status", Static).update("Loading local variants...")
+            self.load_variants(self.variant_key)
+        elif event.value and event.value is not Select.NULL:
             self.query_one("#model", Input).value = str(event.value)
         self.update_model_fields()
 
     def model_options(self):
-        return [(m, m) for m in self.models] + [
+        return [(f"{m} (downloaded)", m) for m in self.models] + [
+            (f"{m} (library)", "@library/" + m) for m in self.library] + [
             ("Custom model..." if self.models else "Custom model... (no models listed)", "")]
 
     def update_model_snapshot(self, state):
@@ -311,32 +336,97 @@ class Wizard(Dialog):
             self.query_one("#model", Input).value = model
             self.app.submit_job("models-pull", model=model)
 
-    @on(Button.Pressed, "#wizard-ollama-library")
+    def ensure_library(self):
+        if self.step == 1 and self.query_one("#provider", Select).value == "ollama" and self.library_key is None:
+            self.search_library()
+
+    @on(Input.Changed, "#library-search")
+    def library_search_changed(self):
+        if self.library_timer:
+            self.library_timer.stop()
+        self.library_key = None
+        if self.step == 1 and self.query_one("#provider", Select).value == "ollama":
+            self.library_timer = self.set_timer(0.35, self.search_library)
+
+    @on(Button.Pressed, "#library-refresh")
+    def search_library(self):
+        if self.library_timer:
+            self.library_timer.stop()
+        if self.step != 1 or self.query_one("#provider", Select).value != "ollama":
+            return
+        self.library_key = (self.value("library-search"), object())
+        self.load_library(self.library_key, 1)
+
+    @on(Button.Pressed, "#library-more")
+    def more_library(self):
+        self.load_library(self.library_key, self.library_page + 1)
+
     @work(exit_on_error=False)
-    async def model_library(self):
+    async def load_library(self, key, number):
+        self.query_one("#library-more", Button).disabled = True
+        self.query_one("#library-status", Static).update("Searching Ollama library...")
         try:
-            opened = await background(webbrowser.open, "https://ollama.com/search?c=tools", new=2)
-            if not opened:
-                self.app.notify("Could not open the browser: https://ollama.com/search?c=tools", severity="error")
-        except OSError:
-            self.app.notify("Could not open the browser: https://ollama.com/search?c=tools", severity="error")
+            names, more = await background(catalog.search, key[0], number)
+            if not self.is_mounted or key != self.library_key:
+                return
+            self.library = list(dict.fromkeys((self.library if number > 1 else []) + names))
+            self.library_page = number
+            self.refresh_model_options()
+            self.query_one("#library-more", Button).disabled = not more
+            self.query_one("#library-status", Static).update(
+                f"{len(self.library)} library families" if self.library else "No matching local tool models")
+        except (ValueError, OSError) as exc:
+            if self.is_mounted and key == self.library_key:
+                self.query_one("#library-status", Static).update(str(exc))
+
+    @work(exit_on_error=False)
+    async def load_variants(self, key):
+        try:
+            rows = await background(catalog.variants, key[0].removeprefix("@library/"))
+            if not self.is_mounted or key != self.variant_key:
+                return
+            selector = self.query_one("#library-variant", Select)
+            with selector.prevent(Select.Changed):
+                selector.set_options([(f"{name} ({size}; download)", name) for name, size in rows])
+                selector.clear()
+            self.query_one("#library-status", Static).update(
+                "Choose a variant; download required" if rows else "No local variants available")
+        except (ValueError, OSError) as exc:
+            if self.is_mounted and key == self.variant_key:
+                self.query_one("#library-status", Static).update(str(exc))
+
+    @on(Select.Changed, "#library-variant")
+    def variant_chosen(self, event):
+        if self.variant_key:
+            self.query_one("#model", Input).value = event.value if isinstance(event.value, str) else ""
+            self.query_one("#library-status", Static).update(
+                "Choose a local variant" if event.value is Select.NULL else
+                "Downloaded" if event.value in self.models else "Download required on Pull or Save and Start")
 
     def update_models(self, models):
         names = sorted({model for model in models if isinstance(model, str) and model})
         if names == self.models:
             return
         self.models = names
+        self.refresh_model_options()
+        self.update_model_fields()
+
+    def refresh_model_options(self):
         selector = self.query_one("#installed", Select)
         selected = selector.value
+        options = self.model_options()
+        if isinstance(selected, str) and selected.startswith("@library/") and selected not in [value for _, value in options]:
+            options.insert(len(self.models), (selected.removeprefix("@library/") + " (library)", selected))
         with selector.prevent(Select.Changed):
-            selector.set_options(self.model_options())
-            selector.value = selected if selected in names else ""
-        self.update_model_fields()
+            selector.set_options(options)
+            selector.value = selected if selected in [value for _, value in options] else ""
 
     def update_model_fields(self):
         ollama = self.query_one("#provider", Select).value == "ollama"
-        for ident in ("#installed", "#installed-label", "#ollama-status", "#ollama-controls"):
+        for ident in ("#installed", "#installed-label", "#ollama-status", "#ollama-controls",
+                      "#library-search-controls", "#library-status"):
             self.query_one(ident).display = ollama
+        self.query_one("#library-variant").display = ollama and self.variant_key is not None
         state = self.model_state
         url = state.get("url", "configured server")
         if state.get("state") == "ready":
@@ -372,6 +462,7 @@ class Wizard(Dialog):
 
     @on(Select.Changed, "#provider")
     def update_provider(self):
+        self.variant_key = None
         harness = self.query_one("#harness", Select).value
         provider = self.query_one("#provider", Select).value
         self.query_one("#auth-import").display = harness != "opencode"
@@ -385,6 +476,7 @@ class Wizard(Dialog):
         with selector.prevent(Select.Changed):
             selector.value = model if model in self.models else ""
         self.update_model_fields()
+        self.ensure_library()
 
     @on(Button.Pressed, "#auth-import")
     def auth(self):

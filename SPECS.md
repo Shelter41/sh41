@@ -45,7 +45,15 @@ prefixes and suggests directories only. A directory-only Textual tree provides
 filesystem browsing with root/home/parent navigation and asynchronous path checks;
 browsing does not reserve or materialize an agent directory. Its Ollama selector follows the existing
 passive model snapshots, preserving explicit/custom choices on refresh; no model
-is started or downloaded by choosing it. Remote/native models remain free text.
+is started or downloaded by choosing it. An independent read-only HTML adapter
+fetches official Ollama tool-model search pages and per-family tags asynchronously.
+The dropdown labels downloaded models separately from library families; local tags
+include published weight sizes and exclude cloud variants. Search is debounced,
+pagination is explicit, and stale responses cannot replace newer searches or a
+different model selection. Requests have timeouts and response-size limits; library
+failures leave local/custom choices usable. This public-page adapter is not a
+stable Ollama catalog API and may need adjustment if their markup changes.
+Compatible-endpoint/native models remain free text.
 Wizard model snapshots retain server health and address rather than reducing
 unavailable inventories to an unexplained empty list. Explicit start/pull actions
 use the existing supervisor jobs. CLI model listing uses the same passive discovery

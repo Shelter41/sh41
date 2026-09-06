@@ -57,15 +57,20 @@ Selecting a non-Git folder requires Original folder (read-write) or Private copy
 Other agents using the repository/folder appear with their mode and recorded
 status. Shared original-folder edits require confirmation, including overlapping
 parent/child folders and paused/parked agents that can later resume.
-The Ollama model dropdown lists downloaded models and refreshes while the wizard
-is open. Choose Custom model to enter another tag. Compatible endpoints and native
-providers retain manual model entry; their remote catalogs are not queried.
+The Ollama model dropdown combines downloaded models with families from the live
+[Ollama tools library](https://ollama.com/search?c=tools), labeled separately.
+Search the library or use More for further results, then choose a local variant
+from its dropdown, including the published download size (not required RAM).
+Cloud-only variants are excluded. Choose Custom model to enter another tag.
+Compatible endpoints and native providers retain manual model entry.
 The wizard shows the selected Ollama address and distinguishes an unreachable
 server, an unavailable inventory, and a server with no downloads. Start / Reuse
 and Pull model are available there; opening the wizard never starts a server or
-downloads weights automatically. The dropdown is not the online Ollama catalog.
-Model library opens Ollama's tools catalog in your browser. Choose a local model
-tag there, then enter it in Pull model; cloud-only models are not supported.
+downloads weights automatically. Library browsing stays inside the terminal and
+does not require a running Ollama server, but needs internet access to ollama.com.
+If the library is unavailable, downloaded models and custom entry remain usable.
+Pull model explicitly downloads the chosen tag; Save and Start also downloads
+missing weights during deployment. Save Only writes YAML without downloading.
 It never overwrites a file, and saved YAML remains available if deployment fails.
 
 Each started agent has its own detached tmux session **inside its Docker sandbox**.
