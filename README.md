@@ -34,6 +34,9 @@ needs internet access.
 2. Choose a harness and model. For local inference, choose **OpenCode + Ollama**.
 3. Select **Save and Start**, then select the agent and **Attach**.
 
+Claude and Codex offer only their native models, plus an account-default option.
+Ollama and compatible endpoints are available with OpenCode.
+
 A Git repository gets its own worktree and branch, starting from committed `HEAD`.
 For a non-Git folder, choose **Original folder** or **Private copy**.
 **Save Only** writes the YAML without creating an agent or downloading anything.

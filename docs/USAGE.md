@@ -64,7 +64,14 @@ use More for further results. Escape closes suggestions without closing the wiza
 Then choose a local variant
 from its dropdown, including the published download size (not required RAM).
 Cloud-only variants are excluded. Choose Custom model to enter another tag.
-Compatible endpoints and native providers retain manual model entry.
+Compatible endpoints retain manual model entry. Claude Code and Codex use separate
+native-model dropdowns, with no Ollama or compatible-endpoint choices. Claude offers
+the documented Opus, Sonnet and Haiku aliases; Codex offers documented native model
+IDs. Default (account) omits a model override. These are bundled choices, not a live
+account entitlement check; availability still depends on the provider and plan.
+Switching harnesses restores only that harness's model, endpoint and API-key
+reference. CLI flags and existing YAML still accept explicit model IDs for
+compatibility; the wizard requires a listed native choice before saving.
 The wizard shows the selected Ollama address and distinguishes an unreachable
 server, an unavailable inventory, and a server with no downloads. Start / Reuse
 and Pull model are available there; opening the wizard never starts a server or

@@ -16,6 +16,7 @@ from .client import background
 from .completion import DirectorySuggester
 from .directory_picker import DirectoryPicker
 from .model_picker import ModelPicker
+from .native_models import NATIVE_MODELS
 
 
 def references(text):
@@ -124,6 +125,8 @@ class Wizard(Dialog):
         self.library_key = None
         self.library_timer = None
         self.variant_key = None
+        self.current_harness = None
+        self.harness_drafts = {}
 
     def compose(self):
         spec = self.initial
@@ -152,6 +155,9 @@ class Wizard(Dialog):
                     yield Select([("Ollama", "ollama"), ("Compatible endpoint", "openai-compatible"),
                                   ("Native provider", "native")], allow_blank=False,
                                  value=spec.inference.provider if spec else "ollama", id="provider")
+                    yield Label("Native model", id="native-model-label")
+                    yield Select(NATIVE_MODELS["codex"], value="", prompt="Choose native model", id="native-model")
+                    yield Static("Availability depends on your account.", id="native-model-note")
                     yield Label("Ollama model", id="installed-label")
                     with Horizontal(id="library-search-controls"):
                         yield ModelPicker(self.model_options(), value=spec.model if spec and spec.model in self.models else "",
@@ -276,9 +282,15 @@ class Wizard(Dialog):
         return self.query_one("#" + ident, Input).value.strip()
 
     def make_spec(self):
+        harness = self.query_one("#harness", Select).value
+        model = self.value("model")
+        if harness in NATIVE_MODELS:
+            model = self.query_one("#native-model", Select).value
+            if model not in {value for _, value in NATIVE_MODELS[harness]}:
+                raise ValueError("Choose a native model for the selected harness")
         return build_spec(name=self.value("name"), workspace=self.value("workspace"),
-            source=self.value("source"), source_mode=self.source_mode(), harness=self.query_one("#harness", Select).value,
-            provider=self.query_one("#provider", Select).value, model=self.value("model"),
+            source=self.value("source"), source_mode=self.source_mode(), harness=harness,
+            provider=self.query_one("#provider", Select).value, model=model,
             base_url=self.value("endpoint"), api_key_env=self.value("key-env"),
             instructions=self.value("instructions"), mcp=self.mcp)
 
@@ -443,7 +455,10 @@ class Wizard(Dialog):
                 selector.value = ""
 
     def update_model_fields(self):
-        ollama = self.query_one("#provider", Select).value == "ollama"
+        native = self.query_one("#harness", Select).value in NATIVE_MODELS
+        ollama = not native and self.query_one("#provider", Select).value == "ollama"
+        for ident in ("#native-model", "#native-model-label", "#native-model-note"):
+            self.query_one(ident).display = native
         for ident in ("#installed", "#installed-label", "#ollama-status", "#ollama-controls",
                       "#library-search-controls", "#library-status"):
             self.query_one(ident).display = ollama
@@ -469,25 +484,46 @@ class Wizard(Dialog):
         self.query_one("#ollama-status", Static).update(status)
         self.query_one("#wizard-ollama-start", Button).disabled = state.get("state") == "ready" and not state.get("stale")
         picker = self.query_one("#installed", ModelPicker)
-        custom = not ollama or (not picker.value and not picker.query_text)
+        custom = not native and (not ollama or (not picker.value and not picker.query_text))
         for ident in ("#model", "#model-label"):
             self.query_one(ident).display = custom
 
     @on(Select.Changed, "#harness")
     def harness_changed(self):
-        harness = self.query_one("#harness", Select).value
-        provider = self.query_one("#provider", Select)
-        if harness != "opencode":
-            provider.value = "native"
-        elif provider.value == "native":
-            provider.value = "ollama"
         self.update_provider()
 
     @on(Select.Changed, "#provider")
     def update_provider(self):
         self.variant_key = None
         harness = self.query_one("#harness", Select).value
-        provider = self.query_one("#provider", Select).value
+        provider_select = self.query_one("#provider", Select)
+        changed = self.current_harness != harness
+        if changed and self.current_harness is not None:
+            self.harness_drafts[self.current_harness] = dict(
+                provider=provider_select.value, **{key: self.value(key) for key in ("model", "endpoint", "key-env")})
+            draft = self.harness_drafts.get(harness, {})
+            for key in ("model", "endpoint", "key-env"):
+                self.query_one("#" + key, Input).value = draft.get(key, "")
+            provider = draft.get("provider", "native" if harness in NATIVE_MODELS else "ollama")
+        else:
+            provider = provider_select.value
+        self.current_harness = harness
+        choices = [("Native provider", "native")] if harness in NATIVE_MODELS else [
+            ("Ollama", "ollama"), ("Compatible endpoint", "openai-compatible")]
+        with provider_select.prevent(Select.Changed):
+            if changed:
+                provider_select.set_options(choices)
+            provider_select.value = provider if provider in {value for _, value in choices} else choices[0][1]
+        provider_select.disabled = harness in NATIVE_MODELS
+        provider = provider_select.value
+        if changed and harness in NATIVE_MODELS:
+            native_select = self.query_one("#native-model", Select)
+            options = NATIVE_MODELS[harness]
+            model = self.value("model")
+            with native_select.prevent(Select.Changed):
+                native_select.set_options(options)
+                native_select.value = model if model in {value for _, value in options} else Select.NULL
+            self.query_one("#native-model-label", Label).update("Claude model" if harness == "claude-code" else "Codex model")
         self.query_one("#auth-import").display = harness != "opencode"
         for selector in ("#endpoint", "#endpoint-label"):
             self.query_one(selector).display = provider == "openai-compatible"
@@ -500,6 +536,12 @@ class Wizard(Dialog):
             selector.value = model if model in self.models else ""
         self.update_model_fields()
         self.ensure_library()
+
+    @on(Select.Changed, "#native-model")
+    def native_model_changed(self, event):
+        harness = self.query_one("#harness", Select).value
+        if harness in NATIVE_MODELS and event.value == self.query_one("#native-model", Select).value:
+            self.query_one("#model", Input).value = event.value if isinstance(event.value, str) else ""
 
     @on(Button.Pressed, "#auth-import")
     def auth(self):

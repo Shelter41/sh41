@@ -119,6 +119,14 @@ explicit multi-variant choices, exact-tag confirmation, cancellation and selecti
 preservation. Catalog fixtures include cloud-only cards whose descriptions mention
 parameter counts, so those numbers cannot masquerade as download badges.
 
+`tests/test_native_models.py` covers Claude/Codex dropdowns at both terminal sizes,
+native-only inference, exact/default YAML output, rejection of unlisted initial
+choices, and per-harness model/endpoint/key-reference drafts. These tests do not
+perform billed inference or assert account access. Native choices are checked
+against [Claude Code model configuration](https://code.claude.com/docs/en/model-config)
+and [Codex models](https://learn.chatgpt.com/docs/models); refresh the bundled UI
+catalog when those provider documents change.
+
 The real shell test starts two detached OpenCode terminals without a model prompt,
 attaches and detaches through Textual, resizes the terminal, closes and kills shell
 processes, verifies a running turn finishes, reopens the dashboard and checks

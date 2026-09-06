@@ -57,7 +57,15 @@ pagination is explicit, and stale responses cannot replace newer searches or a
 different model selection. Requests have timeouts and response-size limits; library
 failures leave local/custom choices usable. This public-page adapter is not a
 stable Ollama catalog API and may need adjustment if their markup changes.
-Compatible-endpoint/native models remain free text.
+Compatible-endpoint models remain free text. Claude Code and Codex instead expose
+harness-specific native dropdowns from a small documented catalog in the UI, with
+an account-default choice that omits the model override. Native harnesses lock the
+inference provider to native and hide local-model controls and free-text model
+entry. Draft model/endpoint/key-reference values are isolated per harness when
+switching. Unlisted initial native IDs require an explicit supported choice; they
+are not silently replaced. Existing YAML and CLI parsing remain unchanged so
+provider releases do not invalidate stored identities. The bundled catalog is
+not an account entitlement probe and must be reviewed when providers change models.
 
 Library filtering reads cloud and parameter-size badges, not parameter counts in
 descriptions. Pull confirms an already resolved model tag and preserves the wizard

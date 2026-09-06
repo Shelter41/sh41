@@ -1,5 +1,7 @@
 # Decisions
 
+- Restrict native-harness wizard choices to documented Claude aliases and Codex IDs, with an account-default fallback, while keeping stored manifests forward-compatible instead of tying their validity to a changing UI catalog.
+
 - Disable Pull for unresolved library choices instead of guessing a tag or requesting manual entry, while resolving a sole downloadable variant automatically and confirming the exact selected tag before download.
 
 - Combine Ollama search and model selection in an autocomplete field while retaining a separate explicit local-variant choice to reduce controls without silently choosing model sizes.

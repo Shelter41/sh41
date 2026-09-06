@@ -289,7 +289,8 @@ async def test_wizard_directory_completion_and_model_dropdown(tmp_path, monkeypa
         assert wizard.value("model") == "remote-model"
         wizard.query_one("#harness", Select).value = "codex"
         await pilot.pause()
-        assert not selector.display and wizard.query_one("#model").display
+        assert not selector.display and not wizard.query_one("#model").display
+        assert wizard.query_one("#native-model").display
 
 
 @pytest.mark.asyncio
