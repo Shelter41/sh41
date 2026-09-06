@@ -13,6 +13,7 @@ from ..spec import parse_yaml
 from .dialogs import Dialog, Prompt
 from .client import background
 from .completion import DirectorySuggester
+from .directory_picker import DirectoryPicker
 
 
 def references(text):
@@ -97,6 +98,9 @@ class Wizard(Dialog):
     Wizard TextArea { height: 1fr; min-height: 5; }
     Wizard #wizard-error { max-height: 4; overflow-y: auto; }
     Wizard #auth-import { margin: 1 0 0 0; }
+    Wizard #source-controls { height: 3; margin: 0; }
+    Wizard #source { width: 1fr; }
+    Wizard #source-browse { min-width: 10; width: 10; }
     """
 
     def __init__(self, models=(), spec=None):
@@ -121,8 +125,10 @@ class Wizard(Dialog):
                     yield Label("Workspace")
                     yield Input(spec.workspace if spec else "default", id="workspace")
                     yield Label("Source directory (optional)")
-                    yield Input(spec.source.path if spec and spec.source else "", id="source",
-                                suggester=DirectorySuggester())
+                    with Horizontal(id="source-controls"):
+                        yield Input(spec.source.path if spec and spec.source else "", id="source",
+                                    suggester=DirectorySuggester())
+                        yield Button("Browse", id="source-browse")
                     yield Static("", id="source-info", markup=False)
                     yield Select([("Original folder", "direct"), ("Private copy", "copy")],
                                  prompt="Choose folder access", id="source-mode")
@@ -188,6 +194,14 @@ class Wizard(Dialog):
         if self.value("source"):
             self.inspection_timer = self.set_timer(0.25, self.inspect_source)
 
+    @on(Button.Pressed, "#source-browse")
+    def browse_source(self):
+        self.app.push_screen(DirectoryPicker(self.value("source")), self.directory_chosen)
+
+    def directory_chosen(self, path):
+        if path is not None:
+            self.query_one("#source", Input).value = path
+
     @work(exit_on_error=False)
     async def inspect_source(self):
         key = self.inspection_key
@@ -209,7 +223,7 @@ class Wizard(Dialog):
             self.source_mode_changed()
         except (ValueError, RuntimeError, OSError) as exc:
             if key == self.inspection_key and self.is_mounted:
-                self.query_one("#source-info", Static).update(str(exc))
+                self.query_one("#source-info", Static).update(f"Directory {key[0]}: {exc}")
 
     @on(Select.Changed, "#source-mode")
     def source_mode_changed(self):

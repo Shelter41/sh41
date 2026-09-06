@@ -48,6 +48,9 @@ opens a guided wizard; Import YAML deploys an existing manifest after confirmati
 The wizard writes the same schema as CLI flags, with Save Only or Save and Start.
 Source directories autocomplete as you type; press Right at the end to accept a
 suggestion. Absolute, relative, and `~/` paths are supported, including spaces.
+Browse opens a directory tree with Root, Home, and Up navigation, hidden folders,
+and an editable path. Browsing is not restricted to the starting folder; selection
+still obeys source safety checks and your operating system's access permissions.
 Selecting a Git checkout proposes a new worktree and `agent/<agent-name>` branch
 from its committed `HEAD`; uncommitted changes stay in the original checkout.
 Selecting a non-Git folder requires Original folder (read-write) or Private copy.

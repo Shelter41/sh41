@@ -35,7 +35,9 @@ with font family and size owned by the terminal emulator, not the application.
 
 The wizard completes source paths with Textual's inline suggester using read-only
 directory scans off the UI thread. It preserves relative and home-directory
-prefixes and suggests directories only. Its Ollama selector follows the existing
+prefixes and suggests directories only. A directory-only Textual tree provides
+filesystem browsing with root/home/parent navigation and asynchronous path checks;
+browsing does not reserve or materialize an agent directory. Its Ollama selector follows the existing
 passive model snapshots, preserving explicit/custom choices on refresh; no model
 is started or downloaded by choosing it. Remote/native models remain free text.
 
