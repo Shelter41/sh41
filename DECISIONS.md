@@ -20,3 +20,4 @@
 - Treat unreachable runtime observations as unknown rather than overwriting durable lifecycle state from a failed probe.
 - Keep Ollama monitoring passive and distinguish downloaded models from loaded models because disk availability does not imply memory residency.
 - Support and validate macOS first; Linux host certification, actual reboot and additional provider-account evidence are deferred checks, not local-shell MVP blockers.
+- Copy Shelter41's dark palette into the standalone shell, but inherit the terminal font and leave native harness themes untouched to avoid changing user terminal settings.

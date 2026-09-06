@@ -63,6 +63,11 @@ async def test_dashboard_navigation_filter_selection_and_models(dimensions):
     app = Shell(client)
     async with app.run_test(size=dimensions) as pilot:
         await settled(pilot, app)
+        assert app.title == "Shelter41" and app.theme == "shelter41"
+        assert app.home.styles.background.hex == "#050504"
+        header = app.q("Header")
+        assert header.region.y == 0 and header.region.height == 3
+        assert "Shelter41" in str(app.q("HeaderTitle", Static).content)
         table = app.q("#agents-table", DataTable)
         assert table.row_count == 100
         table.move_cursor(row=40)

@@ -67,6 +67,10 @@ shell process's environment; native account import is always explicit. A `*` on
 an agent state means the observation is stale. Unknown is not proof of stopped
 compute; the detail pane separately shows the recorded lifecycle and timestamp.
 Use an 80-column, 24-line terminal or larger. Long tables scroll horizontally.
+The shell uses Shelter41's dark palette: near-black surfaces, warm white text and
+amber controls. Font family and size come from your terminal emulator; a TUI cannot
+load the web app's Inter font. SF Mono matches the web console's code-font stack
+where available. The shell does not change your terminal profile or native harness themes.
 The supervisor inherits `OLLAMA_HOST` when first started; set it before your first
 command for a custom server. Existing model-server ownership guards still apply.
 

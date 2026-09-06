@@ -29,6 +29,9 @@ without starting it, adopting ownership or pulling a model. Downloaded weights,
 loaded memory and configured agent model references are distinct concepts.
 
 The architecture diagram and phase acceptance checklist are in SHELL_PLAN.md.
+The shell copies Shelter41's dark-theme color tokens locally and uses a persistent
+Shelter41 header; typography is limited to terminal-supported weight and emphasis,
+with font family and size owned by the terminal emulator, not the application.
 
 DockerProvider builds pinned harness images and creates one restricted container
 per deployment. Each identity has three private host directories mounted into its

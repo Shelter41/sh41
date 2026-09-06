@@ -26,12 +26,33 @@ def size(value):
 
 
 class Shell(App):
-    TITLE = "sh41"
-    SUB_TITLE = "Local agents"
+    TITLE = "Shelter41"
+    SUB_TITLE = ""
     ENABLE_COMMAND_PALETTE = False
     CSS = """
     Screen { background: $background; }
-    Header { background: $surface; }
+    Header { height: 3; padding: 0 1; background: #080806; color: $foreground; }
+    HeaderIcon, HeaderClockSpace { display: none; }
+    HeaderTitle { height: 100%; content-align: left middle; text-style: bold; }
+    Button { text-style: none; background: $surface; color: $foreground;
+        border: tall #30291d; }
+    Button:hover { background: #17140d; border: tall #57462c; }
+    Button:focus { border: tall #c67d2d; text-style: none; }
+    Button.-primary { background: #ee982e; color: #170d03; border: tall #d98224;
+        text-style: bold; }
+    Button.-primary:hover, Button.-primary:focus { background: #f5a43d;
+        color: #170d03; border: tall #ffb14f; }
+    Input, SelectCurrent { background: $surface; border: tall #30291d; }
+    Input:focus, Select:focus > SelectCurrent { border: tall #c67d2d; }
+    DataTable { background: $surface; }
+    DataTable > .datatable--header { background: #100f0c; color: #aaa195;
+        text-style: none; }
+    DataTable > .datatable--cursor { background: #332819; color: #eee9df;
+        text-style: none; }
+    DataTable:focus > .datatable--cursor { background: #332819; color: #f0a84b;
+        text-style: none; }
+    Tab { color: #9b9386; }
+    Tab.-active { color: #f0a84b; text-style: bold; }
     #health { height: 1; padding: 0 1; color: $text-muted; }
     TabbedContent { height: 1fr; }
     TabPane { padding: 0 1; }
@@ -61,11 +82,23 @@ class Shell(App):
         self.polling = set()
         self.submitted = set()
         self.attaching = False
-        self.register_theme(Theme(name="sh41", primary="#51b9ad", secondary="#a4b1ad",
-            accent="#e6ba69", foreground="#e6e8e7", background="#191b1c",
-            surface="#25292a", panel="#303536", success="#84bb87", warning="#e6ba69",
-            error="#e08080", dark=True))
-        self.theme = "sh41"
+        # Copy the cloud dark-theme tokens without depending on its frontend package.
+        self.register_theme(Theme(name="shelter41", primary="#ee982e", secondary="#aaa195",
+            accent="#f0a13d", foreground="#eee9df", background="#050504",
+            surface="#0d0c09", panel="#11100c", success="#82d66b", warning="#f0a13d",
+            error="#ef5d4f", dark=True, variables={
+                "text-muted": "#80796d", "text-disabled": "#665f54",
+                "border": "#c67d2d", "border-blurred": "#30291d",
+                "footer-background": "#080806", "footer-key-foreground": "#f0a13d",
+                "footer-description-foreground": "#aaa195",
+                "button-focus-text-style": "none",
+                "block-cursor-background": "#332819", "block-cursor-foreground": "#f0a84b",
+                "block-cursor-text-style": "none", "input-selection-background": "#44301a",
+                "input-cursor-background": "#f0a13d", "input-cursor-foreground": "#050504",
+                "scrollbar": "#3a3021", "scrollbar-hover": "#57462c",
+                "scrollbar-active": "#c67d2d", "scrollbar-background": "#080806",
+            }))
+        self.theme = "shelter41"
 
     def compose(self) -> ComposeResult:
         yield Header()
